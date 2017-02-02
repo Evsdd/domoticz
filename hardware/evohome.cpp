@@ -172,7 +172,6 @@ bool CEvohome::StartHardware()
 		
 		std::vector<std::vector<std::string> > result;
 		result = m_sql.safe_query("SELECT Name,DeviceID,nValue FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit==0)", m_HwdID);
-			
 		if (result.size()>0)
 		{
 			std::vector<std::string> sd=result[0];
@@ -323,8 +322,8 @@ void CEvohome::Do_Work()
 				{
 					if (startup)
 					{
-						InitControllerName();
-						InitZoneNames();
+	//					InitControllerName();
+	//					InitZoneNames();
 
 						if (GetControllerID() == 0xFFFFFF)  //Check whether multiple controllers have been detected
 						{
@@ -350,10 +349,9 @@ void CEvohome::Do_Work()
 					}
 					else//Request each individual zone temperature every 300s as the controller omits multi-room zones
 					{
-						uint8_t nZoneCount = GetZoneCount();
-						for (uint8_t i = 0; i < nZoneCount; i++)
-							RequestZoneTemp(i);
-						RequestDHWTemp();  // Request DHW temp from controller as workaround for being unable to identify DeviceID
+	//					uint8_t nZoneCount = GetZoneCount();
+	//					for (uint8_t i = 0; i < nZoneCount; i++)
+	//						RequestZoneTemp(i);
 					}
 					if (AllSensors == false) // Check whether individual zone sensors has been activated 
 					{
@@ -378,6 +376,8 @@ void CEvohome::Do_Work()
 					stLastRelayCheck=boost::get_system_time();
 				}
 			}
+			//Trying do_send here to speed up any repeats
+			//Do_Send();//FIXME afaik if there is a collision then we should increase the back off period exponentially if it happens again
 		}
 	}
 	_log.Log(LOG_STATUS,"evohome: Serial Worker stopped...");
@@ -387,8 +387,21 @@ std::string CEvohomeMsg::Encode()
 {
 	std::string szRet;
 	char szTmp[1024];	
-	sprintf(szTmp,"%s - 18:730 %s %s %04X %03d ",szPacketType[type],GetStrID(1).c_str(),GetStrID(2).c_str(),command,payloadsize);
-	szRet=szTmp;
+	//sprintf(szTmp,"%s - 18:730 %s %s %04X %03d ",szPacketType[type],GetStrID(1).c_str(),GetStrID(2).c_str(),command,payloadsize);
+	if (GetID(0) == 0) // Domoticz control messages
+		sprintf(szTmp, "095 %+2s --- 18:730 %s %s %04X %03d ", szPacketType[type], GetStrID(1).c_str(), GetStrID(2).c_str(), command, payloadsize);
+		//sprintf(szTmp, "095 %s --- 18:002858 %s %s %04X %03d ", szPacketType[type], GetStrID(1).c_str(), GetStrID(2).c_str(), command, payloadsize);
+	else  // Repeater function messages
+	{	
+		//if (CEvohomeID::GetIDType(0) == CEvohomeID::devController) // Controller messages
+		//	sprintf(szTmp, "045 %+2s --- 18:730 %s %s %04X %03d ", szPacketType[type], GetStrID(1).c_str(), GetStrID(2).c_str(), command, payloadsize);
+		//else // Repeat exact message received
+			sprintf(szTmp, "095  I --- 18:730 01:073076 --:------ 1F09 001 00  \n 045 %s --- %s %s %s %04X %03d",szPacketType[type], GetStrID(0).c_str(), GetStrID(1).c_str(), GetStrID(2).c_str(), command, payloadsize);
+			//sprintf(szTmp, "095 %+2s --- %s %s %s %04X %03d ", , GetStrID(0).c_str(), GetStrID(1).c_str() command, payloadsize);		
+			//sprintf(szTmp, "%s --- %s %s %s %04X %03d ", szPacketType[type], GetStrID(0).c_str(), GetStrID(1).c_str(), GetStrID(2).c_str(), command, payloadsize);		
+			//sprintf(szTmp, "%s --- 18:730 %s %s %04X %03d ", szPacketType[type], GetStrID(0).c_str(), GetStrID(2).c_str(), command, payloadsize);
+	}
+	szRet = szTmp;
 	for(int i=0;i<payloadsize;i++)
 	{
 		sprintf(szTmp,"%02hhX",payload[i]);
@@ -691,9 +704,9 @@ void CEvohome::SendZoneSensor()
 				tsen.EVOHOME2.type = pTypeEvohomeZone;
 				tsen.EVOHOME2.subtype = sTypeEvohomeZone;
 				tsen.EVOHOME2.zone = i;
-				tsen.EVOHOME2.temperature = dbTemp * 100;
+				tsen.EVOHOME2.temperature = static_cast<uint16_t>(dbTemp * 100);
 				RFX_SETID3(ID, tsen.EVOHOME2.id1, tsen.EVOHOME2.id2, tsen.EVOHOME2.id3);
-				sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Zone Temp", 255);
+				sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Zone Temp", -1);
 			}
 		}
 	}
@@ -734,8 +747,21 @@ bool CEvohome::HandleLoopData(const char *data, size_t len)
 int CEvohome::ProcessBuf(char * buf, int size)
 {
 	int start = 0;
-
-	for (int i = 0; i < size; ++i) 
+	
+	//std::string szRet; 
+	//char szTmp[2048];
+	// print contents of buffer
+	//for (int i = 0; i < size; ++i)
+	//{
+	//	if (buf[i] < 32)
+	//		sprintf(szTmp, "[%02x]", buf[i]);
+	//	else
+	//		sprintf(szTmp, "%c", buf[i]);
+	//	szRet += szTmp;
+	//}
+	//CEvohome::Log(false, LOG_STATUS, "evohome: ProcessBuf: \n %s", szRet.c_str());
+	
+	for (int i = 0; i < size; ++i)
 	{
 		if(buf[i]==0x11)//this appears to be a break character?
 			start=i+1;
@@ -766,6 +792,8 @@ bool CEvohomeMsg::DecodePacket(const char * rawmsg)
 	std::string line(rawmsg);
 	std::vector<std::string> tkns;
 	boost::split(tkns,line,boost::is_any_of(" "),boost::token_compress_on);//There are sometimes 2 spaces between token 1 and 2 so we use token_compress_on to avoid an additional empty token
+	
+	//CEvohome::Log(false, LOG_STATUS, "evohome: Raw packet \n %s", line.c_str());
 	for (size_t i = 0; i < tkns.size(); i++)
 	{
 		std::string tkn(tkns[i]);
@@ -894,10 +922,56 @@ void CEvohome::ProcessMsg(const char * rawmsg)
 			PopSendQueue(msg);
 		}
 		else
+		{
 			DecodePayload(msg);
+			// add device repeater functionality
+			//CEvohome::Log(false, LOG_STATUS, "evohome: Repeater device check DeviceID = 0x%x", msg.GetID(0)); 
+			if (msg.GetID(0) == 0x11e46d || msg.GetID(2) == 0x11e46d || msg.GetID(0) == 0x51d74) //v0.16
+			//if (msg.GetID(0) == 0x11e46d || msg.GetID(2) == 0x11e46d) 
+			{
+				//CEvohome::Log(false, LOG_STATUS, "evohome: Repeating messages paused", msg.GetID(0)); 
+				CEvohome::Log(false, LOG_STATUS, "evohome: Repeating message (v0.16) for DeviceID = 0x%x \n Last msg: (%s)", msg.GetID(0), lastmsg.c_str());
+				
+				if (rawmsg != lastmsg)
+				{
+					std::string lastmsg = rawmsg;
+					if (msg.GetID(0) == 0x11e46d)//Prioritise any non-controller repeat messages
+					{
+						boost::lock_guard<boost::mutex> l(m_mtxSend);
+						m_SendQueue.push_front(rawmsg);//may throw bad_alloc
+						
+						//Copied do_send() here as want to repeat device messages immediately
+						//boost::lock_guard<boost::mutex> rl(readQueueMutex);//ideally we need some way to send only if we're not in the middle of receiving a packet but as everything is buffered i'm not sure if this will be effective
+						//if (m_nBufPtr>0)
+						//	return;
+						//boost::lock_guard<boost::mutex> sl(m_mtxSend);
+						//if (!m_SendQueue.empty())
+						//{
+						//	if (m_SendQueue.front().BadMsg())//message rejected by HGI80 which will not be picked up as a failed send
+						//		m_SendQueue.pop_front();
+						//	else
+						//	{
+								//Log(true, LOG_STATUS, "evohome: Sending: Queue check - devices (0x%x,0x%x,0x%x)", m_SendQueue.front().GetID(0), m_SendQueue.front().GetID(1), m_SendQueue.front().GetID(2));
+
+								std::string out(m_SendQueue.front().Encode() + "\r\n");
+								Log(true, LOG_STATUS, "evohome: Sending: (%d) (%s)", out.length(), out.c_str());
+								write(out.c_str(), out.length());
+								m_SendQueue.pop_front();
+						//	}
+						//}
+					}
+					else
+						AddSendQueue(rawmsg);
+				}
+			}
+		}		
 	}
 	else
-		Log(true,LOG_ERROR,"evohome: invalid message structure - possible corrupt message");
+	{
+		//Log(true, LOG_ERROR, "evohome: invalid message structure - possible corrupt message");
+		Log(true, LOG_ERROR, "evohome: invalid message structure - possible corrupt message (see below)");
+		Log(rawmsg, msg);
+	}
 }
 
 bool CEvohome::DecodePayload(CEvohomeMsg &msg)
@@ -1030,7 +1104,6 @@ bool CEvohome::DecodeSetpoint(CEvohomeMsg &msg)//0x2309
 		Log(false,LOG_ERROR,"evohome: %s: Error decoding zone setpoint payload, size incorrect: %d", tag, msg.payloadsize);
 		return false;
 	}
-	
 	REVOBUF tsen;
 	memset(&tsen,0,sizeof(REVOBUF));
 	tsen.EVOHOME2.len=sizeof(tsen.EVOHOME2)-1;
@@ -1057,7 +1130,7 @@ bool CEvohome::DecodeSetpoint(CEvohomeMsg &msg)//0x2309
 		//The exception appears to be for local overrides which may be possible to track by seeing if a change
 		//occurs that does not correspond to the controller setpoint for a given zone
 		if (msg.GetID(0) == GetControllerID())	
-			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Setpoint", 255);
+			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Setpoint", -1);
 		else if (AllSensors)
 		{
 			char zstrname[40];
@@ -1065,7 +1138,7 @@ bool CEvohome::DecodeSetpoint(CEvohomeMsg &msg)//0x2309
 			sprintf(zstrname, "Zone %d", tsen.EVOHOME2.zone);
 			tsen.EVOHOME2.zone += 12; //zone number offset by 12
 			Log(true, LOG_STATUS, "evohome: %s: Setting: %d (0x%x): %d", tag, tsen.EVOHOME2.zone, msg.GetID(0), tsen.EVOHOME2.temperature);
-			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, zstrname, 255);
+			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, zstrname, -1);
 		}
 	}
 	
@@ -1132,7 +1205,7 @@ bool CEvohome::DecodeSetpointOverride(CEvohomeMsg &msg)//0x2349
 		Log(true,LOG_STATUS,"evohome: %s: Setting: %d (0x%x): %d (%d=%s)", tag, tsen.EVOHOME2.zone, msg.GetID(0), tsen.EVOHOME2.temperature, tsen.EVOHOME2.mode, GetZoneModeName(tsen.EVOHOME2.mode));
 	}
 	
-	sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Setpoint", 255);
+	sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Setpoint", -1);
 	return true;
 }
 
@@ -1183,7 +1256,7 @@ bool CEvohome::DecodeZoneTemp(CEvohomeMsg &msg)//0x30C9
 		Log(true, LOG_STATUS, "evohome: %s: Zone sensor msg: 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
 		if(tsen.EVOHOME2.temperature!=0x7FFF)//afaik this is the error value just ignore it right now as we have no way to report errors...also perhaps could be returned if DHW is not installed?
 		{
-			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Zone Temp", 255);
+			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Zone Temp", -1);
 			if (msg.GetID(0) == GetControllerID())
 				bRefresh=SetMaxZoneCount(tsen.EVOHOME2.zone);//this should increase on startup as we poll all zones so we don't respond to changes here
 		}
@@ -1203,6 +1276,7 @@ bool CEvohome::DecodeZoneTemp(CEvohomeMsg &msg)//0x30C9
 		//msg from sensor itself
 		if (AllSensors) 
 		{
+			std::vector<std::vector<std::string> > result;
 			char zstrname[40];
 			std::string zstrid(CEvohomeID::GetHexID(msg.GetID(0)));
 
@@ -1211,7 +1285,7 @@ bool CEvohome::DecodeZoneTemp(CEvohomeMsg &msg)//0x30C9
 			{
 				tsen.EVOHOME2.zone = atoi(result[0][0].c_str());
 				Log(true, LOG_STATUS, "evohome: %s: Zone sensor msg: 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
-				sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Zone Temp", 255);
+				sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Zone Temp", -1);
 			}
 			else // If matching relay with same deviceID then create a new Zone Temp sensor with zone number offset by 12
 			{
@@ -1221,7 +1295,7 @@ bool CEvohome::DecodeZoneTemp(CEvohomeMsg &msg)//0x30C9
 					tsen.EVOHOME2.zone = atoi(result[0][0].c_str()) + 12;
 					sprintf(zstrname, "Zone %d", atoi(result[0][0].c_str()));
 					Log(true, LOG_STATUS, "evohome: %s: Zone sensor msg: 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
-					sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, zstrname, 255); 		
+					sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, zstrname, -1); 		
 				}
 			}			
 		}
@@ -1285,7 +1359,7 @@ bool CEvohome::DecodeDHWState(CEvohomeMsg &msg)//1F41
 		Log(true,LOG_STATUS,"evohome: %s: Setting: %d: %d (%d=%s)", tag, tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature, tsen.EVOHOME2.mode, GetZoneModeName(tsen.EVOHOME2.mode));
 	}
 	
-	sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "DHW", 255);
+	sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "DHW", -1);
 	return true;
 }
 
@@ -1331,7 +1405,7 @@ bool CEvohome::DecodeDHWTemp(CEvohomeMsg &msg)//1260
 		tsen.EVOHOME2.temperature = msg.payload[i + 1] << 8 | msg.payload[i + 2];
 		Log(true,LOG_STATUS,"evohome: %s: DHW sensor msg: 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
 		if(tsen.EVOHOME2.temperature!=0x7FFF)//afaik this is the error value just ignore it right now as we have no way to report errors...also perhaps could be returned if DHW is not installed?
-			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "DHW Temp", 255);
+			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "DHW Temp", -1);
 	}
 
 	return true;
@@ -1367,7 +1441,7 @@ bool CEvohome::DecodeControllerMode(CEvohomeMsg &msg)//2E04
 	CEvohomeDateTime::DecodeDateTime(tsen.EVOHOME1,msg.payload,1);
 	tsen.EVOHOME1.mode=msg.payload[7];//1 is tmp 0 is perm
 	Log(true,LOG_STATUS,"evohome: %s: Setting: (%d=%s) (%d=%s) %s", tag, tsen.EVOHOME1.status, GetControllerModeName(tsen.EVOHOME1.status),tsen.EVOHOME1.mode,tsen.EVOHOME1.mode?"Temporary":"Permanent",CEvohomeDateTime::GetStrDate(tsen.EVOHOME1).c_str());
-	sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME1, "Controller Mode", 255);
+	sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME1, "Controller Mode", -1);
 	
 	if(SetControllerMode(nControllerMode))//if only the until time changed we should be ok as the unit will broadcast a new controller mode when the current mode ends
 		RequestZoneState();//This can conflict with our startup polling but will still succeed ok
@@ -1428,15 +1502,15 @@ bool CEvohome::DecodeZoneName(CEvohomeMsg &msg)
 	Log(true,LOG_STATUS,"evohome: %s: %d: Name %s",tag,nZone,&msg.payload[2]);
 	if(m_bStartup[0] && nZone<m_nMaxZones)
 		RequestZoneStartupInfo(nZone);
-	
+
 	// Update any zone names which are still the defaults
-	result = m_sql.safe_query("SELECT Name FROM Devicestatus WHERE ((HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (Name == 'Zone Temp')) OR ((HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (Name == 'Setpoint'))", m_HwdID, (int)pTypeEvohomeZone,nZone, m_HwdID, (int)pTypeEvohomeZone,nZone);
+	result = m_sql.safe_query("SELECT Name FROM Devicestatus WHERE ((HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (Name == 'Zone Temp')) OR ((HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (Name == 'Setpoint'))", m_HwdID, (int)pTypeEvohomeZone, nZone, m_HwdID, (int)pTypeEvohomeZone, nZone);
 	if (result.size() != 0)
 		m_sql.safe_query("UPDATE Devicestatus SET Name='%q' WHERE (HardwareID==%d) AND (Type==%d) AND (Unit == %d)", (const char*)&msg.payload[2], m_HwdID, (int)pTypeEvohomeZone, nZone);
 	result = m_sql.safe_query("SELECT Name FROM Devicestatus WHERE (HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (Name == 'Zone')", m_HwdID, (int)pTypeEvohomeRelay, nZone);
 	if (result.size() != 0)
 		m_sql.safe_query("UPDATE Devicestatus SET Name='%q' WHERE (HardwareID==%d) AND (Type==%d) AND (Unit == %d)", (const char*)&msg.payload[2], m_HwdID, (int)pTypeEvohomeRelay, nZone);
-		
+
 	return true;
 }
 
@@ -1516,7 +1590,7 @@ bool CEvohome::DecodeZoneWindow(CEvohomeMsg &msg)
 		Log(true,LOG_STATUS,"evohome: %s: Unexpected zone state Window=%d",tag,nWindow);
 	if(nMisc!=0)
 		Log(true,LOG_STATUS,"evohome: %s: Unexpected zone state nMisc=%d",tag,nMisc);
-	Log(true, LOG_STATUS, "evohome: %s: %d: Window %d", tag, tsen.EVOHOME2.zone, nWindow);
+	Log(true,LOG_STATUS,"evohome: %s: %d: Window %d",tag,tsen.EVOHOME2.zone,nWindow);
 	
 	if (msg.GetID(0) == GetControllerID()) // Filter out messages from other controllers
 		sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Zone Window", 255);
@@ -1566,7 +1640,8 @@ void CEvohome::RXRelay(uint8_t nDevNo, uint8_t nDemand, int nID)
 	RFX_SETID3(nID,tsen.EVOHOME3.id1,tsen.EVOHOME3.id2,tsen.EVOHOME3.id3);
 	tsen.EVOHOME3.devno=nDevNo;
 	tsen.EVOHOME3.demand=nDemand;
-	sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME3, NULL, 255);
+	tsen.EVOHOME3.updatetype = CEvohome::updDemand;
+	sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME3, NULL, -1);
 }
 
 bool CEvohome::DecodeHeatDemand(CEvohomeMsg &msg)
@@ -1589,17 +1664,17 @@ bool CEvohome::DecodeHeatDemand(CEvohomeMsg &msg)
 		//Demand (0x0008 for relays) is handled as a % (i.e. nDemand/200*100) (200=0xc8) where 200/200 corresponds to 100% of the cycle period (start of period determined by 3B00 ACTUATOR_CHECK message)
 		//So where 100% is always on then 50% is half on half off per cycle i.e. 6 cycles per hour = 10 minutes per cycle with 5 mins on & 5 mins off etc,
 		//presumably there are some settings (0x1100) that give the number of cycles per hour which would determine the length of each period
-		if (msg.GetID(0) == GetControllerID())
-			szSourceType = "Controller";
-		else if (msg.GetID(0) == GetGatewayID())
-			szSourceType = "Gateway";
+		if(msg.GetID(0)==GetControllerID())
+			szSourceType="Controller";
+		else if(msg.GetID(0)==GetGatewayID())
+			szSourceType="Gateway";
 	}
 	else if(msg.command==0x3150) //heat demand for zone is also a % (as above) of the proportional band (a temperature difference) so if the proportional band is 2 degrees and we are 1 degree from set point the demand is 50%
-	{		
+	{
 		if (nDevNo <= 12)
 			nDevNo++; //Need to add 1 to give correct zone numbers
 		RXRelay(static_cast<uint8_t>(nDevNo), static_cast<uint8_t>(nDemand), msg.GetID(0)); // adding DeviceID creates multiple devices for zones with mutiple sensors
-		szSourceType = "Zone";
+		szSourceType="Zone";
 	}
 	
 	if(nDevNo==0xfc)//252...afaik this is also some sort of broadcast channel so maybe there is more to this device number than representing the boiler
@@ -1718,9 +1793,11 @@ bool CEvohome::DecodeBatteryInfo(CEvohomeMsg &msg)
 	RFX_SETID3(msg.GetID(0),tsen.EVOHOME2.id1,tsen.EVOHOME2.id2,tsen.EVOHOME2.id3)
 	tsen.EVOHOME2.updatetype = updBattery;
 	
-	double dbCharge=0;
-	if(nBattery!=0xFF)
-		dbCharge=(double)nBattery/2.0; //Presumed to be the charge level where sent
+	if (nBattery == 0xFF)
+		nBattery = 100; // recode full battery (0xFF) to 100 for consistency across device types
+	else
+		nBattery = nBattery / 2;  // recode battery level values to 0-100 from original 0-200 values
+
 	if(nLowBat==0)
 		nBattery=0;
 	tsen.EVOHOME2.battery_level=nBattery;
@@ -1733,10 +1810,34 @@ bool CEvohome::DecodeBatteryInfo(CEvohomeMsg &msg)
 			tsen.EVOHOME2.type=pTypeEvohomeZone;
 			tsen.EVOHOME2.subtype=sTypeEvohomeZone;
 			tsen.EVOHOME2.zone=nDevNo;
-			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, NULL, 255);
+			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, NULL, nBattery);
+
+			if (AllSensors)
+			{
+				tsen.EVOHOME2.type = pTypeEvohomeZone;
+				tsen.EVOHOME2.subtype = sTypeEvohomeZone;
+				tsen.EVOHOME2.zone += 12;
+				sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, NULL, nBattery); // Update Zone device battery level
+			}
+
+			tsen.EVOHOME3.len = sizeof(tsen.EVOHOME3) - 1;
+			tsen.EVOHOME3.type = pTypeEvohomeRelay;
+			tsen.EVOHOME3.subtype = sTypeEvohomeRelay;
+			RFX_SETID3(msg.GetID(0), tsen.EVOHOME3.id1, tsen.EVOHOME3.id2, tsen.EVOHOME3.id3);
+			tsen.EVOHOME3.devno = nDevNo;
+			tsen.EVOHOME3.demand = 0;
+			tsen.EVOHOME3.updatetype = CEvohome::updBattery;
+			tsen.EVOHOME3.battery_level = nBattery;
+			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME3, NULL, nBattery);
 		}
 		else
-			szType="Dev";
+		{
+			szType="Dev";  
+			tsen.EVOHOME2.type = pTypeEvohomeZone;
+			tsen.EVOHOME2.subtype = sTypeEvohomeZone;
+			tsen.EVOHOME2.zone = nDevNo; 
+			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, NULL, nBattery);  // Update Relay device battery level
+		}		
 	}
 	else if(msg.id[0].GetIDType()==CEvohomeID::devSensor)
 	{
@@ -1745,9 +1846,9 @@ bool CEvohome::DecodeBatteryInfo(CEvohomeMsg &msg)
 		tsen.EVOHOME2.type=pTypeEvohomeWater;
 		tsen.EVOHOME2.subtype=sTypeEvohomeWater;
 		tsen.EVOHOME2.zone=nDevNo;
-		sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, NULL, 255);
+		sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, NULL, nBattery);
 	}
-	Log(true,LOG_STATUS,"evohome: %s: %s=%d (0x%x:0x%x:0x%x) charge=%d (%.1f %%) level=%d (%s)",tag,szType.c_str(),nDevNo, msg.GetID(0), msg.GetID(1), msg.GetID(2),nBattery,dbCharge,nLowBat,(nLowBat==0)?"Low":"OK");
+	Log(true,LOG_STATUS,"evohome: %s: %s=%d charge=%d(%%) level=%d (%s)",tag,szType.c_str(),nDevNo,nBattery,nLowBat,(nLowBat==0)?"Low":"OK");
 	
 	return true;
 }
@@ -1785,8 +1886,12 @@ void CEvohome::Do_Send()
 			m_SendQueue.pop_front();
 		else
 		{
-			std::string out(m_SendQueue.front().Encode()+"\r\n");
-			write(out.c_str(),out.length());
+			//Log(true, LOG_STATUS, "evohome: Sending: Queue check - devices (0x%x,0x%x,0x%x)", m_SendQueue.front().GetID(0), m_SendQueue.front().GetID(1), m_SendQueue.front().GetID(2));
+			
+			std::string out(m_SendQueue.front().Encode() + "\r\n");
+			Log(true, LOG_STATUS, "evohome: Sending: (%d) (%s)", out.length(), out.c_str());
+			write(out.c_str(), out.length());
+			m_SendQueue.pop_front();
 		}
 	}
 }
@@ -1903,12 +2008,26 @@ void CEvohome::SetGatewayID(int nID)
 
 void CEvohome::LogDate()
 {
-        char szTmp[256];
-	time_t atime = mytime(NULL);
-        struct tm ltime;
-        localtime_r(&atime, &ltime);
-        
-        strftime (szTmp,256,"%Y-%m-%d %H:%M:%S ",&ltime);
+		char szTmps[256];
+		char szTmp[256];
+
+		struct timeval tv; 
+		struct timespec time_now;
+		struct tm *nowtm;
+		time_t nowtime;
+
+		clock_gettime(CLOCK_REALTIME, &time_now);
+
+		TIMESPEC_TO_TIMEVAL(&tv, &time_now);
+
+		nowtime = tv.tv_sec; 
+		nowtm = localtime(&nowtime);
+
+		int milli = (int)(time_now.tv_nsec * 0.000001);
+			
+		strftime(szTmps, sizeof szTmps, "%Y-%m-%d %H:%M:%S", nowtm);
+		snprintf(szTmp, sizeof szTmp, "%s.%03d ", szTmps, milli);
+
         *m_pEvoLog << szTmp;
 }
 
@@ -2089,7 +2208,7 @@ namespace http {
 			}
 			else if (type == "ZoneSensor")
 			{	
-				//get dev count
+				//Check whether any devices already exist
 				std::vector<std::vector<std::string> > result;
 				result = m_sql.safe_query("SELECT MAX(Unit) FROM DeviceStatus WHERE (HardwareID==%d) AND (Type==%d) AND (Unit>=40) AND (Unit<52)", HwdID,(int)pTypeEvohomeZone);
 				int nDevCount = 0;
@@ -2097,6 +2216,7 @@ namespace http {
 				{
 					nDevCount = atoi(result[0][0].c_str());
 				}
+				else nDevCount = 39;// If first device, assign Unit=40 (+1 below)
 
 				if (nDevCount == 51)// Allow a maximum of 12 sensors
 				{
