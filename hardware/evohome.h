@@ -117,9 +117,9 @@ public:
 	static std::string GetStrID(unsigned int nID)
 	{
 		if(!nID)
-			return "-:-";
+			return "--:------";
 		char szTmp[256];
-		sprintf(szTmp,"%hhu:%u",GetIDType(nID),GetIDAddr(nID));
+		sprintf(szTmp,"%02hhu:%06u",GetIDType(nID),GetIDAddr(nID));
 		return szTmp;
 	}
 	static std::string GetHexID(unsigned int nID)
@@ -297,7 +297,7 @@ public:
 	CEvohomeMsg& operator = (const CEvohomeMsg& src)
 	{
 		flags=src.flags;
-		type=src.type;
+		type = src.type;
 		for(int i=0;i<3;i++)
 			id[i]=src.id[i];//maintain flags
 		timestamp=src.timestamp;
@@ -313,7 +313,7 @@ public:
 		//ignore flags may not be set correctly atm
 		//ignore timestamp as not sure this would change the intent of the packet if present
 		if(type!=other.type)
-			return false;
+			return false; 
 		for(int i=1;i<3;i++)//ignore the source address as the special 18:730 addr used for sending will not match the one read back in
 			if(id[i]!=other.id[i])
 				return false;
@@ -609,6 +609,8 @@ private:
 	unsigned int m_MaxDeviceID;
 
 	bool AllSensors;
+
+	std::string lastmsg;
 	
 	struct _tRelayCheck
 	{

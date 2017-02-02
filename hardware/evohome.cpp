@@ -24,6 +24,7 @@
 #include "../webserver/cWebem.h"
 #include "../json/json.h"
 
+
 #include <string>
 #include <algorithm>
 #include <iostream>
@@ -40,11 +41,11 @@
 extern std::string szUserDataFolder;
 
 std::ofstream *CEvohome::m_pEvoLog=NULL;
-#ifdef _DEBUG
+//#ifdef _DEBUG
 bool CEvohome::m_bDebug=true;
-#else
-bool CEvohome::m_bDebug=false;
-#endif
+//#else
+//bool CEvohome::m_bDebug=false;
+//#endif
 
 const char CEvohome::m_szControllerMode[7][20]={"Normal","Economy","Away","Day Off","Custom","Heating Off","Unknown"};
 const char CEvohome::m_szWebAPIMode[7][20]={"Auto","AutoWithEco","Away","DayOff","Custom","HeatingOff","Unknown"};
@@ -290,16 +291,16 @@ void CEvohome::Do_Work()
 				{
 					if (startup)
 					{
-						InitControllerName();
-						InitZoneNames();
+	//					InitControllerName();
+	//					InitZoneNames();
 
 						startup = false;
 					}
 					else//Request each individual zone temperature every 300s as the controller omits multi-room zones
 					{
-						uint8_t nZoneCount = GetZoneCount();
-						for (uint8_t i = 0; i < nZoneCount; i++)
-							RequestZoneTemp(i);
+	//					uint8_t nZoneCount = GetZoneCount();
+	//					for (uint8_t i = 0; i < nZoneCount; i++)
+	//						RequestZoneTemp(i);
 					}
 					if (AllSensors == false) // Check whether individual zone sensors has been activated 
 					{
@@ -324,6 +325,8 @@ void CEvohome::Do_Work()
 					stLastRelayCheck=boost::get_system_time();
 				}
 			}
+			//Trying do_send here to speed up any repeats
+			//Do_Send();//FIXME afaik if there is a collision then we should increase the back off period exponentially if it happens again
 		}
 	}
 	_log.Log(LOG_STATUS,"evohome: Serial Worker stopped...");
@@ -333,8 +336,21 @@ std::string CEvohomeMsg::Encode()
 {
 	std::string szRet;
 	char szTmp[1024];	
-	sprintf(szTmp,"%s - 18:730 %s %s %04X %03d ",szPacketType[type],GetStrID(1).c_str(),GetStrID(2).c_str(),command,payloadsize);
-	szRet=szTmp;
+	//sprintf(szTmp,"%s - 18:730 %s %s %04X %03d ",szPacketType[type],GetStrID(1).c_str(),GetStrID(2).c_str(),command,payloadsize);
+	if (GetID(0) == 0) // Domoticz control messages
+		sprintf(szTmp, "095 %+2s --- 18:730 %s %s %04X %03d ", szPacketType[type], GetStrID(1).c_str(), GetStrID(2).c_str(), command, payloadsize);
+		//sprintf(szTmp, "095 %s --- 18:002858 %s %s %04X %03d ", szPacketType[type], GetStrID(1).c_str(), GetStrID(2).c_str(), command, payloadsize);
+	else  // Repeater function messages
+	{	
+		//if (CEvohomeID::GetIDType(0) == CEvohomeID::devController) // Controller messages
+		//	sprintf(szTmp, "045 %+2s --- 18:730 %s %s %04X %03d ", szPacketType[type], GetStrID(1).c_str(), GetStrID(2).c_str(), command, payloadsize);
+		//else // Repeat exact message received
+			sprintf(szTmp, "095  I --- 18:730 01:073076 --:------ 1F09 001 00  \n 045 %s --- %s %s %s %04X %03d",szPacketType[type], GetStrID(0).c_str(), GetStrID(1).c_str(), GetStrID(2).c_str(), command, payloadsize);
+			//sprintf(szTmp, "095 %+2s --- %s %s %s %04X %03d ", , GetStrID(0).c_str(), GetStrID(1).c_str() command, payloadsize);		
+			//sprintf(szTmp, "%s --- %s %s %s %04X %03d ", szPacketType[type], GetStrID(0).c_str(), GetStrID(1).c_str(), GetStrID(2).c_str(), command, payloadsize);		
+			//sprintf(szTmp, "%s --- 18:730 %s %s %04X %03d ", szPacketType[type], GetStrID(0).c_str(), GetStrID(2).c_str(), command, payloadsize);
+	}
+	szRet = szTmp;
 	for(int i=0;i<payloadsize;i++)
 	{
 		sprintf(szTmp,"%02hhX",payload[i]);
@@ -680,8 +696,21 @@ bool CEvohome::HandleLoopData(const char *data, size_t len)
 int CEvohome::ProcessBuf(char * buf, int size)
 {
 	int start = 0;
-
-	for (int i = 0; i < size; ++i) 
+	
+	//std::string szRet; 
+	//char szTmp[2048];
+	// print contents of buffer
+	//for (int i = 0; i < size; ++i)
+	//{
+	//	if (buf[i] < 32)
+	//		sprintf(szTmp, "[%02x]", buf[i]);
+	//	else
+	//		sprintf(szTmp, "%c", buf[i]);
+	//	szRet += szTmp;
+	//}
+	//CEvohome::Log(false, LOG_STATUS, "evohome: ProcessBuf: \n %s", szRet.c_str());
+	
+	for (int i = 0; i < size; ++i)
 	{
 		if(buf[i]==0x11)//this appears to be a break character?
 			start=i+1;
@@ -712,6 +741,8 @@ bool CEvohomeMsg::DecodePacket(const char * rawmsg)
 	std::string line(rawmsg);
 	std::vector<std::string> tkns;
 	boost::split(tkns,line,boost::is_any_of(" "),boost::token_compress_on);//There are sometimes 2 spaces between token 1 and 2 so we use token_compress_on to avoid an additional empty token
+	
+	//CEvohome::Log(false, LOG_STATUS, "evohome: Raw packet \n %s", line.c_str());
 	for (size_t i = 0; i < tkns.size(); i++)
 	{
 		std::string tkn(tkns[i]);
@@ -808,6 +839,7 @@ bool CEvohomeMsg::DecodePacket(const char * rawmsg)
 void CEvohome::ProcessMsg(const char * rawmsg)
 {
 	CEvohomeMsg msg(rawmsg);
+
 	if(msg.IsValid())
 	{
 		Log(rawmsg,msg);
@@ -830,10 +862,56 @@ void CEvohome::ProcessMsg(const char * rawmsg)
 			PopSendQueue(msg);
 		}
 		else
+		{
 			DecodePayload(msg);
+			// add device repeater functionality
+			//CEvohome::Log(false, LOG_STATUS, "evohome: Repeater device check DeviceID = 0x%x", msg.GetID(0)); 
+			if (msg.GetID(0) == 0x11e46d || msg.GetID(2) == 0x11e46d || msg.GetID(0) == 0x51d74) //v0.16
+			//if (msg.GetID(0) == 0x11e46d || msg.GetID(2) == 0x11e46d) 
+			{
+				//CEvohome::Log(false, LOG_STATUS, "evohome: Repeating messages paused", msg.GetID(0)); 
+				CEvohome::Log(false, LOG_STATUS, "evohome: Repeating message (v0.16) for DeviceID = 0x%x \n Last msg: (%s)", msg.GetID(0), lastmsg.c_str());
+				
+				if (rawmsg != lastmsg)
+				{
+					std::string lastmsg = rawmsg;
+					if (msg.GetID(0) == 0x11e46d)//Prioritise any non-controller repeat messages
+					{
+						boost::lock_guard<boost::mutex> l(m_mtxSend);
+						m_SendQueue.push_front(rawmsg);//may throw bad_alloc
+						
+						//Copied do_send() here as want to repeat device messages immediately
+						//boost::lock_guard<boost::mutex> rl(readQueueMutex);//ideally we need some way to send only if we're not in the middle of receiving a packet but as everything is buffered i'm not sure if this will be effective
+						//if (m_nBufPtr>0)
+						//	return;
+						//boost::lock_guard<boost::mutex> sl(m_mtxSend);
+						//if (!m_SendQueue.empty())
+						//{
+						//	if (m_SendQueue.front().BadMsg())//message rejected by HGI80 which will not be picked up as a failed send
+						//		m_SendQueue.pop_front();
+						//	else
+						//	{
+								//Log(true, LOG_STATUS, "evohome: Sending: Queue check - devices (0x%x,0x%x,0x%x)", m_SendQueue.front().GetID(0), m_SendQueue.front().GetID(1), m_SendQueue.front().GetID(2));
+
+								std::string out(m_SendQueue.front().Encode() + "\r\n");
+								Log(true, LOG_STATUS, "evohome: Sending: (%d) (%s)", out.length(), out.c_str());
+								write(out.c_str(), out.length());
+								m_SendQueue.pop_front();
+						//	}
+						//}
+					}
+					else
+						AddSendQueue(rawmsg);
+				}
+			}
+		}		
 	}
 	else
-		Log(true,LOG_ERROR,"evohome: invalid message structure - possible corrupt message");
+	{
+		//Log(true, LOG_ERROR, "evohome: invalid message structure - possible corrupt message");
+		Log(true, LOG_ERROR, "evohome: invalid message structure - possible corrupt message (see below)");
+		Log(rawmsg, msg);
+	}
 }
 
 bool CEvohome::DecodePayload(CEvohomeMsg &msg)
@@ -1699,8 +1777,11 @@ void CEvohome::Do_Send()
 			m_SendQueue.pop_front();
 		else
 		{
-			std::string out(m_SendQueue.front().Encode()+"\r\n");
-			write(out.c_str(),out.length());
+			//Log(true, LOG_STATUS, "evohome: Sending: Queue check - devices (0x%x,0x%x,0x%x)", m_SendQueue.front().GetID(0), m_SendQueue.front().GetID(1), m_SendQueue.front().GetID(2));
+			
+			std::string out(m_SendQueue.front().Encode() + "\r\n");
+			Log(true, LOG_STATUS, "evohome: Sending: (%d) (%s)", out.length(), out.c_str());
+			write(out.c_str(), out.length());
 			m_SendQueue.pop_front();
 		}
 	}
@@ -1818,12 +1899,26 @@ void CEvohome::SetGatewayID(int nID)
 
 void CEvohome::LogDate()
 {
-        char szTmp[256];
-	time_t atime = mytime(NULL);
-        struct tm ltime;
-        localtime_r(&atime, &ltime);
-        
-        strftime (szTmp,256,"%Y-%m-%d %H:%M:%S ",&ltime);
+		char szTmps[256];
+		char szTmp[256];
+
+		struct timeval tv; 
+		struct timespec time_now;
+		struct tm *nowtm;
+		time_t nowtime;
+
+		clock_gettime(CLOCK_REALTIME, &time_now);
+
+		TIMESPEC_TO_TIMEVAL(&tv, &time_now);
+
+		nowtime = tv.tv_sec; 
+		nowtm = localtime(&nowtime);
+
+		int milli = (int)(time_now.tv_nsec * 0.000001);
+			
+		strftime(szTmps, sizeof szTmps, "%Y-%m-%d %H:%M:%S", nowtm);
+		snprintf(szTmp, sizeof szTmp, "%s.%03d ", szTmps, milli);
+
         *m_pEvoLog << szTmp;
 }
 
