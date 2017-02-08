@@ -890,8 +890,8 @@ bool CEvohomeMsg::DecodePacket(const char * rawmsg)
 void CEvohome::ProcessMsg(const char * rawmsg)
 {
 	CEvohomeMsg msg(rawmsg);
-	if(msg.IsValid())
-	{
+	//if(msg.IsValid())
+	//{
 		Log(rawmsg,msg);
 		
 		if (GetControllerID()== 0xFFFFFF) // If we still have a dummy controller update the controller DeviceID list
@@ -965,13 +965,13 @@ void CEvohome::ProcessMsg(const char * rawmsg)
 				}
 			}
 		}		
-	}
-	else
-	{
-		//Log(true, LOG_ERROR, "evohome: invalid message structure - possible corrupt message");
-		Log(true, LOG_ERROR, "evohome: invalid message structure - possible corrupt message (see below)");
-		Log(rawmsg, msg);
-	}
+	//}
+	//else
+	//{
+	//	//Log(true, LOG_ERROR, "evohome: invalid message structure - possible corrupt message");
+	//	Log(true, LOG_ERROR, "evohome: invalid message structure - possible corrupt message (see below)");
+	//	Log(rawmsg, msg);
+	//}
 }
 
 bool CEvohome::DecodePayload(CEvohomeMsg &msg)
