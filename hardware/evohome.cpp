@@ -808,8 +808,10 @@ bool CEvohomeMsg::DecodePacket(const char * rawmsg)
 void CEvohome::ProcessMsg(const char * rawmsg)
 {
 	CEvohomeMsg msg(rawmsg);
-	if(msg.IsValid())
-	{
+	// Remove blank check of ID(0) as this can be a valid message
+	// Need to test whether this causes problems
+	//if(msg.IsValid())
+	//{
 		Log(rawmsg,msg);
 		if(!GetControllerID())//no controller id ..just use the 1st one we find
 		{
@@ -831,9 +833,9 @@ void CEvohome::ProcessMsg(const char * rawmsg)
 		}
 		else
 			DecodePayload(msg);
-	}
-	else
-		Log(true,LOG_ERROR,"evohome: invalid message structure - possible corrupt message");
+	//}
+	//else
+	//	Log(true,LOG_ERROR,"evohome: invalid message structure - possible corrupt message");
 }
 
 bool CEvohome::DecodePayload(CEvohomeMsg &msg)
