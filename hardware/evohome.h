@@ -79,7 +79,7 @@ class CEvohomeID : public CEvohomeDataType
 {
 public:
 	enum devType {
-		devController=1,
+		devController=21,  //Changed from default=1 for Itho Spider
 		devZone=4,
 		devSensor=7, //includes DHW and outdoor sensor
 		devRelay=13,
@@ -439,7 +439,7 @@ public:
 		cmdZoneInfo=0x000A,
 		cmdZoneWindow=0x12B0,//Open window/ventilation zone function
 		cmdSetPoint=0x2309,
-		cmdSetpointOverride=0x2349,
+		cmdSetpointOverride=0x2309, // default= 0x2349.  Changed for Itho Spider testing,
 		cmdDHWState=0x1F41,
 		cmdDHWTemp=0x1260,
 		cmdControllerMode=0x2E04,
