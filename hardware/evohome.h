@@ -507,6 +507,7 @@ private:
 	bool DecodeSysInfo(CEvohomeMsg &msg);
 	bool DecodeZoneName(CEvohomeMsg &msg);
 	bool DecodeHeatDemand(CEvohomeMsg &msg);
+	bool DecodeHeatDemand8(CEvohomeMsg &msg);
 	bool DecodeZoneInfo(CEvohomeMsg &msg);
 	bool DecodeBinding(CEvohomeMsg &msg);
 	bool DecodeActuatorState(CEvohomeMsg &msg);

@@ -127,7 +127,7 @@ CEvohome::CEvohome(const int ID, const std::string &szSerialPort, const int baud
 	RegisterDecoder(cmdZoneName,boost::bind(&CEvohome::DecodeZoneName,this, _1));
 	RegisterDecoder(cmdZoneHeatDemand,boost::bind(&CEvohome::DecodeHeatDemand,this, _1));
 	RegisterDecoder(cmdZoneInfo,boost::bind(&CEvohome::DecodeZoneInfo,this, _1));
-	RegisterDecoder(cmdControllerHeatDemand,boost::bind(&CEvohome::DecodeHeatDemand,this, _1));
+	RegisterDecoder(cmdControllerHeatDemand,boost::bind(&CEvohome::DecodeHeatDemand8,this, _1));
 	RegisterDecoder(cmdBinding,boost::bind(&CEvohome::DecodeBinding,this, _1));
 	RegisterDecoder(cmdActuatorState,boost::bind(&CEvohome::DecodeActuatorState,this, _1));
 	RegisterDecoder(cmdActuatorCheck,boost::bind(&CEvohome::DecodeActuatorCheck,this, _1));
@@ -1641,6 +1641,61 @@ bool CEvohome::DecodeHeatDemand(CEvohomeMsg &msg)
 		if (nDevNo < 12)
 			nDevNo++; //Need to add 1 to give correct zone numbers
 		RXRelay(static_cast<uint8_t>(nDevNo),static_cast<uint8_t>(nDemand), msg.GetID(0));
+	}
+	return true;
+}
+
+bool CEvohome::DecodeHeatDemand8(CEvohomeMsg &msg)
+{
+	char tag[] = "HEAT_DEMAND";
+
+	if (msg.GetID(0) != GetControllerID() && msg.GetID(2) != GetControllerID()) // Filter out messages from other controllers
+		return true;
+
+	if (msg.payloadsize != 2) {
+		Log(false, LOG_ERROR, "evohome: %s: Error decoding heat demand, unknown packet size: %d", tag, msg.payloadsize);
+		return false;
+	}
+	int nDevNo = msg.payload[0];
+	int nDemand = msg.payload[1];
+	std::string szSourceType("Unknown"), szDevType("Unknown");
+	if (msg.command == 0x0008)
+	{
+		//Demand (0x0008 for relays) is handled as a % (i.e. nDemand/200*100) (200=0xc8) where 200/200 corresponds to 100% of the cycle period (start of period determined by 3B00 ACTUATOR_CHECK message)
+		//So where 100% is always on then 50% is half on half off per cycle i.e. 6 cycles per hour = 10 minutes per cycle with 5 mins on & 5 mins off etc,
+		//presumably there are some settings (0x1100) that give the number of cycles per hour which would determine the length of each period
+		if (msg.GetID(0) == GetControllerID())
+			szSourceType = "Controller";
+		else if (msg.GetID(0) == GetGatewayID())
+			szSourceType = "Gateway";
+	}
+	else if (msg.command == 0x3150) //heat demand for zone is also a % (as above) of the proportional band (a temperature difference) so if the proportional band is 2 degrees and we are 1 degree from set point the demand is 50%
+	{
+		if (nDevNo <= 12)
+			nDevNo++; //Need to add 1 to give correct zone numbers
+		RXRelay(static_cast<uint8_t>(nDevNo), static_cast<uint8_t>(nDemand), msg.GetID(0)); // adding DeviceID creates multiple devices for zones with mutiple sensors
+		szSourceType = "Zone";
+	}
+
+	if (nDevNo == 0xfc)//252...afaik this is also some sort of broadcast channel so maybe there is more to this device number than representing the boiler
+		szDevType = "Boiler"; //Boiler demand
+	else if (nDevNo == 0xfa)//250
+	{
+		szDevType = "DHW"; //DHW zone valve
+		RequestDHWState();//Trying to link the DHW state refresh to the heat demand...will be broadcast when the controller turns on or off DHW but maybe not if the heat demand doesn't change? (e.g. no heat demand but controller DHW state goes from off to on)
+	}
+	else if (nDevNo == 0xf9)//249
+		szDevType = "Heating"; //Central Heating zone valve
+
+	Log(true, LOG_STATUS, "evohome: %s: %s (0x%x) DevNo 0x%02x %d (0x%x)", tag, szSourceType.c_str(), msg.GetID(0), nDevNo, nDemand, msg.command);
+
+	if (msg.command == 0x0008)
+	{
+		if (nDevNo < 12)
+			nDevNo += 101; //Adding 101 to differentiate from 0x3150 messages
+		else 
+			nDevNo -= 10;  // recode boiler messages too to differentiate from 0x3150
+		RXRelay(static_cast<uint8_t>(nDevNo), static_cast<uint8_t>(nDemand), msg.GetID(0));
 	}
 	return true;
 }
