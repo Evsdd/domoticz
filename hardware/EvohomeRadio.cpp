@@ -582,6 +582,15 @@ void CEvohomeRadio::ProcessMsg(const char * rawmsg)
 {
 	CEvohomeMsg msg(rawmsg);
 	Log(rawmsg,msg);
+	
+	if (msg.GetID(0) == 0) // If id[0] empty copy 2nd or 3rd ID if present
+	{
+		if (msg.GetID(1) != 0)
+			msg.SetID(0,msg.GetID(1));
+		else if (msg.GetID(2) != 0)
+			msg.SetID(0, msg.GetID(2));
+	}
+	
 	if(msg.IsValid())
 	{
 		if (GetControllerID()== 0xFFFFFF) // If we still have a dummy controller update the controller DeviceID list
