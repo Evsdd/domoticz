@@ -40,11 +40,11 @@
 extern std::string szUserDataFolder;
 
 std::ofstream *CEvohome::m_pEvoLog=NULL;
-#ifdef _DEBUG
+//#ifdef _DEBUG
 bool CEvohome::m_bDebug=true;
-#else
-bool CEvohome::m_bDebug=false;
-#endif
+//#else
+//bool CEvohome::m_bDebug=false;
+//#endif
 
 const char CEvohome::m_szControllerMode[7][20]={"Normal","Economy","Away","Day Off","Custom","Heating Off","Unknown"};
 const char CEvohome::m_szWebAPIMode[7][20]={"Auto","AutoWithEco","Away","DayOff","Custom","HeatingOff","Unknown"};
@@ -881,6 +881,15 @@ void CEvohome::ProcessMsg(const char * rawmsg)
 {
 	CEvohomeMsg msg(rawmsg);
 	Log(rawmsg,msg);
+	
+	if (msg.GetID(0) == 0) // If id[0] empty copy 2nd or 3rd ID if present
+	{
+		if (msg.GetID(1) != 0)
+			msg.SetID(0,msg.GetID(1));
+		else if (msg.GetID(2) != 0)
+			msg.SetID(0, msg.GetID(2));
+	}
+	
 	if(msg.IsValid())
 	{
 		if (GetControllerID()== 0xFFFFFF) // If we still have a dummy controller update the controller DeviceID list
