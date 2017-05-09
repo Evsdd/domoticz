@@ -873,12 +873,19 @@ bool CEvohomeRadio::DecodeZoneTemp(CEvohomeMsg &msg)//0x30C9
 {
 	char tag[] = "ZONE_TEMP";
 	std::vector<std::vector<std::string> > result;
+	int nDevNo;
 
 	if (msg.GetID(0) != GetControllerID()) // Filter out messages from other controllers
 	{
 		std::string zstrid(CEvohomeID::GetHexID(msg.GetID(0)));
 		result = m_sql.safe_query("SELECT Unit FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID == '%q')", m_HwdID, zstrid.c_str());
 		if (result.empty()) // Check whether DeviceID has already been registered
+			return true;
+
+		nDevNo = atoi(result[0][0].c_str());
+
+		result = m_sql.safe_query("SELECT DeviceID FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit == '%d') AND (Type == %d)", m_HwdID, nDevNo, (int)pTypeEvohomeZone);
+		if (result.empty()) // If zone device hasn't yet been created don't proceed
 			return true;
 	}
 
@@ -1511,7 +1518,8 @@ bool CEvohomeRadio::DecodeDeviceInfo(CEvohomeMsg &msg)
 bool CEvohomeRadio::DecodeBatteryInfo(CEvohomeMsg &msg)
 {
 	char tag[] = "BATTERY_INFO";
-
+	std::vector<std::vector<std::string> > result;
+	
 	if ((msg.GetID(2) != GetControllerID()) && (msg.id[0].GetIDType() != CEvohomeID::devSensor)) // Filter out messages from other controllers
 		return true;
 
@@ -1522,6 +1530,15 @@ bool CEvohomeRadio::DecodeBatteryInfo(CEvohomeMsg &msg)
 	std::string szType("Unknown");
 	uint8_t nDevNo,nBattery,nLowBat;
 	msg.Get(nDevNo).Get(nBattery).Get(nLowBat);
+
+	if (msg.id[0].GetIDType() == CEvohomeID::devZone) 
+	{
+		//int devcheck = nDevNo + 1;
+		result = m_sql.safe_query("SELECT DeviceID FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit == '%d') AND (Type == %d)", m_HwdID, nDevNo+1, (int)pTypeEvohomeZone);
+		if (result.empty()) // If zone device hasn't yet been created don't proceed
+			return true;
+	}
+
 	REVOBUF tsen;
 	memset(&tsen,0,sizeof(REVOBUF));
 	tsen.EVOHOME2.len=sizeof(tsen.EVOHOME2)-1;
