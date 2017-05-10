@@ -1710,9 +1710,9 @@ void CEvohomeRadio::Idle_Work()
                 if (!result.empty())
                     m_sql.safe_query("DELETE FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='FFFFFF' AND (Type==%d) AND (Unit == 13))", m_HwdID, (int)pTypeEvohomeZone);
             }
-            if (nStarts < 20)
+            if (nStarts < 12)
                 nStarts++;
-            else if (nStarts == 20) // After 1h all devices should have been detected so re-request zone names and trigger device naming
+            else if (nStarts == 12) // After 1h all devices should have been detected so re-request zone names and trigger device naming
             {
                 RequestZoneNames();
                 nStarts++;
