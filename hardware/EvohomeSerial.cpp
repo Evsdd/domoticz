@@ -95,7 +95,7 @@ CEvohomeSerial::CEvohomeSerial(const int ID, const std::string &szSerialPort, co
 	RegisterDecoder(cmdZoneName,boost::bind(&CEvohomeSerial::DecodeZoneName,this, _1));
 	RegisterDecoder(cmdZoneHeatDemand,boost::bind(&CEvohomeSerial::DecodeHeatDemand,this, _1));
 	RegisterDecoder(cmdZoneInfo,boost::bind(&CEvohomeSerial::DecodeZoneInfo,this, _1));
-	RegisterDecoder(cmdControllerHeatDemand,boost::bind(&CEvohomeSerial::DecodeHeatDemand,this, _1));
+	RegisterDecoder(cmdControllerHeatDemand,boost::bind(&CEvohomeSerial::DecodeHeatDemand8,this, _1));
 	RegisterDecoder(cmdBinding,boost::bind(&CEvohomeSerial::DecodeBinding,this, _1));
 	RegisterDecoder(cmdActuatorState,boost::bind(&CEvohomeSerial::DecodeActuatorState,this, _1));
 	RegisterDecoder(cmdActuatorCheck,boost::bind(&CEvohomeSerial::DecodeActuatorCheck,this, _1));
@@ -1585,7 +1585,7 @@ bool CEvohomeSerial::DecodeHeatDemand(CEvohomeMsg &msg)
 	return true;
 }
 
-bool CEvohome::DecodeHeatDemand8(CEvohomeMsg &msg)
+bool CEvohomeSerial::DecodeHeatDemand8(CEvohomeMsg &msg)
 {
 	char tag[] = "HEAT_DEMAND";
 
