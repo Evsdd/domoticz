@@ -6154,13 +6154,8 @@ void MainWorker::decode_evohome2(const int HwdID, const _eHardwareTypes HwdType,
 			HwdID, (int)RFX_GETID3(pEvo->EVOHOME2.id1,pEvo->EVOHOME2.id2,pEvo->EVOHOME2.id3), (int)pEvo->EVOHOME2.type);
 	}
 	if (result.size() < 1 && !pEvo->EVOHOME2.zone)
-	{
-		sprintf(szTmp, "NOTE: Mainworker (Evohome2) rejected message (zone=0 and new DeviceID)");
-		WriteMessage(szTmp); 
 		return;
-	}
 	
-
 	CEvohomeBase *pEvoHW = reinterpret_cast<CEvohomeBase*>(GetHardware(HwdID));
 	bool bNewDev=false;
 	std::string name,szDevID;
