@@ -1698,7 +1698,13 @@ bool CEvohomeSerial::DecodeActuatorState(CEvohomeMsg &msg)
 	//The relay does not appear to always announce its state but this is probably due to the wireless signal and collisions etc
 	
 	Log(true,LOG_STATUS,"evohome: %s: ID:0x%06x (%s) DevNo 0x%02x: %d", tag, msg.GetID(0), msg.GetStrID(0).c_str(), nDevNo, nDemand);
-	RXRelay(static_cast<uint8_t>(0xFF),static_cast<uint8_t>(nDemand));//devno is always 0 and therefore not valid
+	if (nDevNo == 0)
+	{
+		nDevNo = 13; // nDevNo appears to always be 0 so recode to 13 to avoid conflict with controller messages 
+		RXRelay(static_cast<uint8_t>(nDevNo),static_cast<uint8_t>(nDemand), msg.GetID(0));
+	}		
+	else
+		RXRelay(static_cast<uint8_t>(nDevNo), static_cast<uint8_t>(nDemand));
 	return true;
 }
 
