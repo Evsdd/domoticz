@@ -323,13 +323,20 @@ void CEvohomeSerial::Do_Work()
 					}
 					if (AllSensors == false) // Check whether individual zone sensors has been activated 
 					{
-						result = m_sql.safe_query("SELECT HardwareID, DeviceID FROM DeviceStatus WHERE (HardwareID==%d) AND (Type==%d) AND (Unit >= 13) AND (Unit <= 24)", m_HwdID, (int)pTypeEvohomeZone);						
+						std::string zstrid(CEvohomeID::GetHexID(GetControllerID())); 						
+						Log(true, LOG_STATUS, "evohome: AllSensors check (HardwareID==%d) AND (DeviceID!=%s) AND (Type==%d)", m_HwdID, zstrid.c_str(), (int)pTypeEvohomeZone);
+						result = m_sql.safe_query("SELECT HardwareID, DeviceID FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID!='%q') AND (Type==%d) AND (Unit >= 1) AND (Unit <= 12)", m_HwdID, zstrid.c_str(),(int)pTypeEvohomeZone);
 						if (!result.empty())
+						{
+							Log(true, LOG_STATUS, "evohome: AllSensors enabled");
 							AllSensors = true;
+						}
+						else
+							Log(true, LOG_STATUS, "evohome: AllSensors disabled");
 						// Check if the dummy sensor exists and delete
-						result = m_sql.safe_query("SELECT HardwareID, DeviceID FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID == 'FFFFFF') AND (Type==%d) AND (Unit == 13)", m_HwdID, (int)pTypeEvohomeZone);
+						result = m_sql.safe_query("SELECT HardwareID, DeviceID FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID == 'FFFFFF') AND (Type==%d) AND (Unit == 1)", m_HwdID, (int)pTypeEvohomeZone);
 						if (!result.empty())
-							m_sql.safe_query("DELETE FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='FFFFFF' AND (Type==%d) AND (Unit == 13))", m_HwdID, (int)pTypeEvohomeZone);
+							m_sql.safe_query("DELETE FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='FFFFFF' AND (Type==%d) AND (Unit == 1))", m_HwdID, (int)pTypeEvohomeZone);
 					}
 					if (nStarts < 12)
 						nStarts++;
@@ -996,15 +1003,11 @@ bool CEvohomeSerial::DecodeSetpoint(CEvohomeMsg &msg)//0x2309
 		//The exception appears to be for local overrides which may be possible to track by seeing if a change
 		//occurs that does not correspond to the controller setpoint for a given zone
 		if (msg.GetID(0) == GetControllerID())	
-			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Setpoint", -1);
+			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Setpoint - C", -1);
 		else if (AllSensors)
 		{
-			char zstrname[40];
-
-			sprintf(zstrname, "Zone %d", tsen.EVOHOME2.zone);
-			tsen.EVOHOME2.zone += 12; //zone number offset by 12
 			Log(true, LOG_STATUS, "evohome: %s: Setting: %d (0x%x): %d", tag, tsen.EVOHOME2.zone, msg.GetID(0), tsen.EVOHOME2.temperature);
-			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, zstrname, -1);
+			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Setpoint - T", -1);
 		}
 	}
 	
@@ -1072,7 +1075,7 @@ bool CEvohomeSerial::DecodeSetpointOverride(CEvohomeMsg &msg)//0x2349
 		Log(true,LOG_STATUS,"evohome: %s: Setting: %d (0x%x): %d (%d=%s)", tag, tsen.EVOHOME2.zone, msg.GetID(0), tsen.EVOHOME2.temperature, tsen.EVOHOME2.mode, GetZoneModeName(tsen.EVOHOME2.mode));
 	}
 	
-	sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Setpoint", -1);
+	sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Setpoint - C", -1);
 	return true;
 }
 
@@ -1096,7 +1099,6 @@ bool CEvohomeSerial::DecodeZoneTemp(CEvohomeMsg &msg)//0x30C9
 		if (result.empty()) // If zone device hasn't yet been created don't proceed
 			return true;
 	}
-
 
 	if (msg.payloadsize == 1){
 		Log(true,LOG_STATUS,"evohome: %s: Request for zone temp %d",tag, msg.payload[0]);
@@ -1127,11 +1129,11 @@ bool CEvohomeSerial::DecodeZoneTemp(CEvohomeMsg &msg)//0x30C9
 		else
 			tsen.EVOHOME2.zone = 0;
 		tsen.EVOHOME2.temperature = msg.payload[i + 1] << 8 | msg.payload[i + 2];
-		//this is sent for zones that use a zone temperature instead of the internal sensor.
-		Log(true, LOG_STATUS, "evohome: %s: Zone sensor msg: 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
+		//Log(true, LOG_STATUS, "evohome: %s: Zone sensor msg: 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
+		Log(true, LOG_STATUS, "evohome: %s: Zone sensor msg(1): 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
 		if(tsen.EVOHOME2.temperature!=0x7FFF)//afaik this is the error value just ignore it right now as we have no way to report errors...also perhaps could be returned if DHW is not installed?
 		{
-			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Zone Temp", -1);
+			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Zone Temp - C", -1);
 			if (msg.GetID(0) == GetControllerID())
 				bRefresh=SetMaxZoneCount(tsen.EVOHOME2.zone);//this should increase on startup as we poll all zones so we don't respond to changes here
 		}
@@ -1151,26 +1153,27 @@ bool CEvohomeSerial::DecodeZoneTemp(CEvohomeMsg &msg)//0x30C9
 		//msg from sensor itself
 		if (AllSensors) 
 		{
-			std::vector<std::vector<std::string> > result;
-			char zstrname[40];
+			//std::vector<std::vector<std::string> > result;			
 			std::string zstrid(CEvohomeID::GetHexID(msg.GetID(0)));
+			Log(true, LOG_STATUS, "evohome: %s: All Sensors TRUE (%s)", tag,zstrid.c_str());
 
 			result = m_sql.safe_query("SELECT Unit FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID == '%q') AND (Type == %d)", m_HwdID, zstrid.c_str(), (int)pTypeEvohomeZone);
 			if (!result.empty()) // Update existing temp sensor with value directly from sensor
 			{
 				tsen.EVOHOME2.zone = atoi(result[0][0].c_str());
-				Log(true, LOG_STATUS, "evohome: %s: Zone sensor msg: 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
-				sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Zone Temp", -1);
+				//Log(true, LOG_STATUS, "evohome: %s: Zone sensor msg: 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
+				Log(true, LOG_STATUS, "evohome: %s: Zone sensor msg(2): 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
+				sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Zone Temp - T", -1);
 			}
-			else // If matching relay with same deviceID then create a new Zone Temp sensor with zone number offset by 12
+			else // If matching relay with same deviceID then create a new Zone Temp sensor with same zone number
 			{
 				result = m_sql.safe_query("SELECT Unit FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID == '%q') AND (Type == %d)", m_HwdID, zstrid.c_str(), (int)pTypeEvohomeRelay);
 				if (!result.empty()) 
 				{
-					tsen.EVOHOME2.zone = atoi(result[0][0].c_str()) + 12;
-					sprintf(zstrname, "Zone %d", atoi(result[0][0].c_str()));
-					Log(true, LOG_STATUS, "evohome: %s: Zone sensor msg: 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
-					sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, zstrname, -1); 		
+					tsen.EVOHOME2.zone = atoi(result[0][0].c_str());
+					//Log(true, LOG_STATUS, "evohome: %s: Zone sensor msg: 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
+					Log(true, LOG_STATUS, "evohome: %s: Zone sensor msg(3): 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
+					sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "Zone Temp - T", -1);
 				}
 			}			
 		}
@@ -1282,7 +1285,7 @@ bool CEvohomeSerial::DecodeDHWTemp(CEvohomeMsg &msg)//1260
 		tsen.EVOHOME2.temperature = msg.payload[i + 1] << 8 | msg.payload[i + 2];
 		Log(true,LOG_STATUS,"evohome: %s: DHW sensor msg: 0x%x: %d: %d", tag, msg.GetID(0), tsen.EVOHOME2.zone, tsen.EVOHOME2.temperature);
 		if(tsen.EVOHOME2.temperature!=0x7FFF)// DHW is not installed, discard value
-			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "DHW Temp", -1);
+			sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "DHW - C", -1);
 	}
 
 	return true;
@@ -1388,13 +1391,37 @@ bool CEvohomeSerial::DecodeZoneName(CEvohomeMsg &msg)
 		RequestZoneStartupInfo(nZone);
 
 	// Update any zone names which are still the defaults
-	result = m_sql.safe_query("SELECT Name FROM Devicestatus WHERE ((HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (Name == 'Zone Temp')) OR ((HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (Name == 'Setpoint'))", m_HwdID, (int)pTypeEvohomeZone, nZone, m_HwdID, (int)pTypeEvohomeZone, nZone);
+	result = m_sql.safe_query("SELECT Name FROM Devicestatus WHERE ((HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (SUBSTR(Name,1,9) == 'Zone Temp')) OR ((HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (SUBSTR(Name,1,8) == 'Setpoint'))", m_HwdID, (int)pTypeEvohomeZone, nZone, m_HwdID, (int)pTypeEvohomeZone, nZone);
 	if (!result.empty())
-		m_sql.safe_query("UPDATE Devicestatus SET Name='%q' WHERE (HardwareID==%d) AND (Type==%d) AND (Unit == %d)", (const char*)&msg.payload[2], m_HwdID, (int)pTypeEvohomeZone, nZone);
-	result = m_sql.safe_query("SELECT Name FROM Devicestatus WHERE (HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (Name == 'Zone')", m_HwdID, (int)pTypeEvohomeRelay, nZone);
+	{
+		char zstrname[40];
+		char zostrname[40];
+		sprintf(zostrname, "%s", result[0][0].c_str());
+		std::vector<std::string> strarray;
+		StringSplit(result[0][0], "-", strarray);
+		
+		if (strarray.size() > 1)
+			sprintf(zstrname, "%s -%s", (const char*)&msg.payload[2], strarray[1].c_str());
+		else
+			sprintf(zstrname, "%s", (const char*)&msg.payload[2]);
+		m_sql.safe_query("UPDATE Devicestatus SET Name='%q' WHERE (HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (Name == '%q')", zstrname, m_HwdID, (int)pTypeEvohomeZone, nZone, zostrname);
+	}
+		
+	result = m_sql.safe_query("SELECT Name FROM Devicestatus WHERE (HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (SUBSTR(Name,1,4) == 'Zone')", m_HwdID, (int)pTypeEvohomeRelay, nZone);
 	if (!result.empty())
-		m_sql.safe_query("UPDATE Devicestatus SET Name='%q' WHERE (HardwareID==%d) AND (Type==%d) AND (Unit == %d)", (const char*)&msg.payload[2], m_HwdID, (int)pTypeEvohomeRelay, nZone);
-
+	{
+		char zstrname[40];
+		char zostrname[40];
+		sprintf(zostrname, "%s", result[0][0].c_str());
+		std::vector<std::string> strarray;
+		StringSplit(result[0][0], "-", strarray);
+		
+		if (strarray.size() > 1)
+			sprintf(zstrname, "%s -%s", (const char*)&msg.payload[2], strarray[1].c_str());
+		else
+			sprintf(zstrname, "%s", (const char*)&msg.payload[2]);
+		m_sql.safe_query("UPDATE Devicestatus SET Name='%q' WHERE (HardwareID==%d) AND (Type==%d) AND (Unit == %d) AND (Name == '%q')", zstrname, m_HwdID, (int)pTypeEvohomeRelay, nZone, zostrname);
+	}
 	return true;
 }
 
@@ -1750,7 +1777,8 @@ bool CEvohomeSerial::DecodeBatteryInfo(CEvohomeMsg &msg)
 	REVOBUF tsen;
 	memset(&tsen,0,sizeof(REVOBUF));
 	tsen.EVOHOME2.len=sizeof(tsen.EVOHOME2)-1;
-	RFX_SETID3(msg.GetID(0),tsen.EVOHOME2.id1,tsen.EVOHOME2.id2,tsen.EVOHOME2.id3)
+	RFX_SETID3(GetControllerID(), tsen.EVOHOME2.id1, tsen.EVOHOME2.id2, tsen.EVOHOME2.id3); 
+	//RFX_SETID3(msg.GetID(0),tsen.EVOHOME2.id1,tsen.EVOHOME2.id2,tsen.EVOHOME2.id3)
 	tsen.EVOHOME2.updatetype = updBattery;
 	
 	if (nBattery == 0xFF)
@@ -1776,7 +1804,8 @@ bool CEvohomeSerial::DecodeBatteryInfo(CEvohomeMsg &msg)
 			{
 				tsen.EVOHOME2.type = pTypeEvohomeZone;
 				tsen.EVOHOME2.subtype = sTypeEvohomeZone;
-				tsen.EVOHOME2.zone += 12;
+				RFX_SETID3(msg.GetID(0), tsen.EVOHOME2.id1, tsen.EVOHOME2.id2, tsen.EVOHOME2.id3)
+				//tsen.EVOHOME2.zone += 12;
 				sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, NULL, nBattery); // Update Zone device battery level
 			}
 
@@ -1806,7 +1835,7 @@ bool CEvohomeSerial::DecodeBatteryInfo(CEvohomeMsg &msg)
 		tsen.EVOHOME2.type=pTypeEvohomeWater;
 		tsen.EVOHOME2.subtype=sTypeEvohomeWater;
 		tsen.EVOHOME2.zone=nDevNo;
-		RFX_SETID3(GetControllerID(), tsen.EVOHOME2.id1, tsen.EVOHOME2.id2, tsen.EVOHOME2.id3); 
+		//RFX_SETID3(GetControllerID(), tsen.EVOHOME2.id1, tsen.EVOHOME2.id2, tsen.EVOHOME2.id3); 
 		sDecodeRXMessage(this, (const unsigned char *)&tsen.EVOHOME2, "DHW Temp", nBattery);  // Update DHW Zone sensor
 	}
 	Log(true,LOG_STATUS,"evohome: %s: %s=%d charge=%d(%%) level=%d (%s)",tag,szType.c_str(),nDevNo,nBattery,nLowBat,(nLowBat==0)?"Low":"OK");
@@ -1907,13 +1936,16 @@ namespace http {
 			else if (type == "AllSensors")
 			{
 				// Check if All Sensors has already been activated, if not create a temporary dummy sensor				
-				std::vector<std::vector<std::string> > result;
-				result = m_sql.safe_query("SELECT HardwareID, DeviceID FROM DeviceStatus WHERE (HardwareID==%d) AND (Type==%d) AND (Unit > 12) AND (Unit <= 24)", HwdID, (int)pTypeEvohomeZone);
-				if (result.empty())
-				{
+				//int ID = GetControllerID();
+				//std::stringstream s_strid;
+				//s_strid << std::hex << ID; 
+				//std::vector<std::vector<std::string> > result;
+				////result = m_sql.safe_query("SELECT HardwareID, DeviceID FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID!=%d) AND (Type==%d) AND (Unit >= 1) AND (Unit <= 12)", HwdID, s_strid,(int)pTypeEvohomeZone);
+				//if (result.empty())
+				//{
 					std::string devname = "Zone Temp";
-					m_sql.UpdateValue(HwdID, "FFFFFF", 13, pTypeEvohomeZone, sTypeEvohomeZone, 10, 255, 0, "0.0;0.0;Auto", devname);
-				}
+					m_sql.UpdateValue(HwdID, "FFFFFF", 1, pTypeEvohomeZone, sTypeEvohomeZone, 10, 255, 0, "0.0;0.0;Auto", devname);
+				//}
 				root["status"] = "OK";
 				root["title"] = "CreateEvohomeSensor";
 				root["Used"] = false;

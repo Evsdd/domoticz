@@ -138,7 +138,7 @@ public:
 	static std::string GetHexID(unsigned int nID)
 	{
 		char szTmp[256];
-		sprintf(szTmp,"%06x",nID);
+		sprintf(szTmp,"%x",nID);
 		return szTmp;
 	}
 

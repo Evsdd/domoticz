@@ -6139,12 +6139,12 @@ void MainWorker::decode_evohome2(const int HwdID, const _eHardwareTypes HwdType,
 			"FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID == '%x') AND (Type==%d)",
 			HwdID, (int)RFX_GETID3(pEvo->EVOHOME2.id1, pEvo->EVOHOME2.id2, pEvo->EVOHOME2.id3), (int)pEvo->EVOHOME2.type);
 	}
-	else if (pEvo->EVOHOME2.zone)//if unit number is available the id3 will be the controller device id
+	else if (pEvo->EVOHOME2.type == pTypeEvohomeZone && pEvo->EVOHOME2.zone)//if unit number is available the id3 will be the controller device id
 	{
 		result = m_sql.safe_query(
 			"SELECT HardwareID, DeviceID,Unit,Type,SubType,sValue,BatteryLevel "
-			"FROM DeviceStatus WHERE (HardwareID==%d) AND (Unit == %d) AND (Type==%d)",
-			HwdID, (int)pEvo->EVOHOME2.zone, (int)pEvo->EVOHOME2.type);
+			"FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID == '%x') AND (Unit == %d) AND (Type==%d)",
+			HwdID, (int)RFX_GETID3(pEvo->EVOHOME2.id1, pEvo->EVOHOME2.id2, pEvo->EVOHOME2.id3), (int)pEvo->EVOHOME2.zone,(int)pEvo->EVOHOME2.type);
 	}
 	else//unit number not available then id3 should be the zone device id
 	{
@@ -6153,8 +6153,13 @@ void MainWorker::decode_evohome2(const int HwdID, const _eHardwareTypes HwdType,
 			"FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID == '%x') AND (Type==%d)",
 			HwdID, (int)RFX_GETID3(pEvo->EVOHOME2.id1,pEvo->EVOHOME2.id2,pEvo->EVOHOME2.id3), (int)pEvo->EVOHOME2.type);
 	}
-	if (result.size()<1 && !pEvo->EVOHOME2.zone)
+	if (result.size() < 1 && !pEvo->EVOHOME2.zone)
+	{
+		sprintf(szTmp, "NOTE: Mainworker (Evohome2) rejected message (zone=0 and new DeviceID)");
+		WriteMessage(szTmp); 
 		return;
+	}
+	
 
 	CEvohomeBase *pEvoHW = reinterpret_cast<CEvohomeBase*>(GetHardware(HwdID));
 	bool bNewDev=false;
@@ -6414,21 +6419,32 @@ void MainWorker::decode_evohome3(const int HwdID, const _eHardwareTypes HwdType,
 	if (DevRowIdx == -1)
 		return;
 
-	if(bNewDev && (Unit==0xF9 || Unit==0xFA || Unit==0xFC || Unit <=12))
+	if(bNewDev && (Unit == 0xEF || Unit == 0xF0 || Unit == 0xF2 || Unit==0xF9 || Unit==0xFA || Unit==0xFC || Unit <=12))
 	{
-		if(Unit==0xF9)
-			procResult.DeviceName = "CH Valve";
+		if (Unit == 0xEF)
+			procResult.DeviceName = "CH Valve - R1";
+		else if (Unit == 0xF0)
+			procResult.DeviceName = "DHW Valve - R1"; 
+		else if(Unit==0xF9)
+			procResult.DeviceName = "CH Valve - R2";
 		else if(Unit==0xFA)
-			procResult.DeviceName = "DHW Valve";
-		else if(Unit==0xFC)
+			procResult.DeviceName = "DHW Valve - R2";
+		else if (Unit == 0xF2)
 		{
-			if(pEvo->EVOHOME3.id1 >> 2 == CEvohomeID::devBridge) // Evohome OT Bridge
-				procResult.DeviceName = "Boiler (OT Bridge)";
+			if (pEvo->EVOHOME3.id1 >> 2 == CEvohomeID::devBridge) // Evohome OT Bridge
+				procResult.DeviceName = "Boiler (OT Bridge) - R1";
 			else
-				procResult.DeviceName = "Boiler";
+				procResult.DeviceName = "Boiler - R1";
+		}
+		else if (Unit == 0xFC)
+		{
+			if (pEvo->EVOHOME3.id1 >> 2 == CEvohomeID::devBridge) // Evohome OT Bridge
+				procResult.DeviceName = "Boiler (OT Bridge) - R2";
+			else
+				procResult.DeviceName = "Boiler - R2";
 		}
 		else if (Unit <= 12)
-			procResult.DeviceName = "Zone";
+			procResult.DeviceName = "Zone - R";
 		std::vector<std::vector<std::string> > result;
 		result = m_sql.safe_query(
 			"UPDATE DeviceStatus SET Name='%q' WHERE (ID == %" PRIu64 ")",
