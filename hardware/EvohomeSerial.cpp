@@ -324,15 +324,9 @@ void CEvohomeSerial::Do_Work()
 					if (AllSensors == false) // Check whether individual zone sensors has been activated 
 					{
 						std::string zstrid(CEvohomeID::GetHexID(GetControllerID())); 						
-						Log(true, LOG_STATUS, "evohome: AllSensors check (HardwareID==%d) AND (DeviceID!=%s) AND (Type==%d)", m_HwdID, zstrid.c_str(), (int)pTypeEvohomeZone);
 						result = m_sql.safe_query("SELECT HardwareID, DeviceID FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID!='%q') AND (Type==%d) AND (Unit >= 1) AND (Unit <= 12)", m_HwdID, zstrid.c_str(),(int)pTypeEvohomeZone);
 						if (!result.empty())
-						{
-							Log(true, LOG_STATUS, "evohome: AllSensors enabled");
 							AllSensors = true;
-						}
-						else
-							Log(true, LOG_STATUS, "evohome: AllSensors disabled");
 						// Check if the dummy sensor exists and delete
 						result = m_sql.safe_query("SELECT HardwareID, DeviceID FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID == 'FFFFFF') AND (Type==%d) AND (Unit == 1)", m_HwdID, (int)pTypeEvohomeZone);
 						if (!result.empty())
@@ -1155,7 +1149,6 @@ bool CEvohomeSerial::DecodeZoneTemp(CEvohomeMsg &msg)//0x30C9
 		{
 			//std::vector<std::vector<std::string> > result;			
 			std::string zstrid(CEvohomeID::GetHexID(msg.GetID(0)));
-			Log(true, LOG_STATUS, "evohome: %s: All Sensors TRUE (%s)", tag,zstrid.c_str());
 
 			result = m_sql.safe_query("SELECT Unit FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID == '%q') AND (Type == %d)", m_HwdID, zstrid.c_str(), (int)pTypeEvohomeZone);
 			if (!result.empty()) // Update existing temp sensor with value directly from sensor
