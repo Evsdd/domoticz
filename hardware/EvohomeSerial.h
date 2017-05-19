@@ -50,8 +50,9 @@ public:
 		cmdExternalSensor=0x0002,
 		cmdDeviceInfo=0x0418,
 		cmdBatteryInfo=0x1060,
+		cmdSync=0x1F09,
+		cmdDateTime=0x313F
 		//0x10a0 //DHW settings sent between controller and DHW sensor can also be requested by the gateway <1:DevNo><2(uint16_t):SetPoint><1:Overrun?><2:Differential>
-		//0x1F09 //Unknown fixed message FF070D
 		//0x0005
 		//0x0006
 		//0x0404
@@ -92,6 +93,8 @@ private:
 	bool DecodeExternalSensor(CEvohomeMsg &msg);
 	bool DecodeDeviceInfo(CEvohomeMsg &msg);
 	bool DecodeBatteryInfo(CEvohomeMsg &msg);
+	bool DecodeSync(CEvohomeMsg &msg);
+	bool DecodeDateTm(CEvohomeMsg &msg); 
 	bool DumpMessage(CEvohomeMsg &msg);
 
 	void AddSendQueue(const CEvohomeMsg &msg);

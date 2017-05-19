@@ -103,6 +103,8 @@ CEvohomeSerial::CEvohomeSerial(const int ID, const std::string &szSerialPort, co
 	RegisterDecoder(cmdExternalSensor,boost::bind(&CEvohomeSerial::DecodeExternalSensor,this, _1));
 	RegisterDecoder(cmdDeviceInfo,boost::bind(&CEvohomeSerial::DecodeDeviceInfo,this, _1));
 	RegisterDecoder(cmdBatteryInfo,boost::bind(&CEvohomeSerial::DecodeBatteryInfo,this, _1));
+	RegisterDecoder(cmdSync, boost::bind(&CEvohomeSerial::DecodeSync, this, _1));
+	RegisterDecoder(cmdDateTime, boost::bind(&CEvohomeSerial::DecodeDateTm, this, _1));
 }
 
 
@@ -1734,6 +1736,51 @@ bool CEvohomeSerial::DecodeBatteryInfo(CEvohomeMsg &msg)
 	return true;
 }
 
+bool CEvohomeSerial::DecodeSync(CEvohomeMsg &msg)
+{
+	char tag[] = "SYNC"; //this is used to keep devices in sync with controller and defines the duration between control messages 
+	int nPeriod = msg.payload[0];
+	if (msg.payloadsize == 3)
+	{
+		float nDuration = (msg.payload[1] << 8 | msg.payload[2]) / 10.0;
+		Log(true, LOG_STATUS, "evohome: %s: duration=%.1fsec (%02X)", tag, nDuration, nPeriod);
+		return true;
+	}
+	else if (msg.payloadsize == 1)
+	{
+		Log(true, LOG_STATUS, "evohome: %s: (%02X)", tag, nPeriod);
+		return true;
+	}
+	else
+	{
+		Log(false, LOG_ERROR, "evohome: %s: Error decoding command, unknown packet size: %d", tag, msg.payloadsize);
+		return false;
+	}
+}
+
+bool CEvohomeSerial::DecodeDateTm(CEvohomeMsg &msg)
+{
+	char tag[] = "DATE_TIME"; 
+	int nTxt;
+	if (msg.payloadsize == 9)
+	{
+		nTxt = msg.payload[1]; 
+		int nYear = msg.payload[7] << 8 | msg.payload[8];
+		Log(true, LOG_STATUS, "evohome: %s: (%X) %d-%d-%d %02d:%02d:%02d", tag, nTxt, nYear, msg.payload[6], msg.payload[5], msg.payload[2], msg.payload[3], msg.payload[4]);
+		return true;
+	}
+	else if (msg.payloadsize == 1)
+	{
+		nTxt = msg.payload[0];
+		Log(true, LOG_STATUS, "evohome: %s: (%02X)", tag, nTxt);
+		return true;
+	}
+	else
+	{
+		Log(false, LOG_ERROR, "evohome: %s: Error decoding command, unknown packet size: %d", tag, msg.payloadsize);
+		return false;
+	}
+}
 
 void CEvohomeSerial::AddSendQueue(const CEvohomeMsg &msg)
 {
