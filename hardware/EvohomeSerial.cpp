@@ -1766,7 +1766,7 @@ bool CEvohomeSerial::DecodeDateTm(CEvohomeMsg &msg)
 	{
 		nTxt = msg.payload[1]; 
 		int nYear = msg.payload[7] << 8 | msg.payload[8];
-		Log(true, LOG_STATUS, "evohome: %s: (%X) %d-%d-%d %02d:%02d:%02d", tag, nTxt, nYear, msg.payload[6], msg.payload[5], msg.payload[2], msg.payload[3], msg.payload[4]);
+		Log(true, LOG_STATUS, "evohome: %s: (%X) %d-%02d-%02d %02d:%02d:%02d", tag, nTxt, nYear, msg.payload[6], msg.payload[5], msg.payload[4]&0x0F, msg.payload[3], msg.payload[2]);
 		return true;
 	}
 	else if (msg.payloadsize == 1)
