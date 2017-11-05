@@ -68,6 +68,8 @@
 #include "../hardware/EvohomeBase.h"
 #include "../hardware/EvohomeScript.h"
 #include "../hardware/EvohomeSerial.h"
+#include "../hardware/EvohomeTCP.h"
+#include "../hardware/EvohomeWeb.h"
 #include "../hardware/MySensorsSerial.h"
 #include "../hardware/MySensorsTCP.h"
 #include "../hardware/MySensorsMQTT.h"
@@ -104,6 +106,7 @@
 #include "../hardware/Sterbox.h"
 #include "../hardware/RAVEn.h"
 #include "../hardware/DenkoviSmartdenLan.h"
+#include "../hardware/DenkoviSmartdenIPIn.h"
 #include "../hardware/AccuWeather.h"
 #include "../hardware/BleBox.h"
 #include "../hardware/Ec3kMeterTCP.h"
@@ -121,7 +124,9 @@
 #include "../hardware/OpenWebNetUSB.h"
 #include "../hardware/InComfort.h"
 #include "../hardware/RelayNet.h"
-#include "../hardware/SysfsGPIO.h"
+#include "../hardware/SysfsGpio.h"
+#include "../hardware/Rtl433.h"
+#include "../hardware/OnkyoAVTCP.h"
 
 // load notifications configuration
 #include "../notifications/NotificationHelper.h"
@@ -294,6 +299,9 @@ void MainWorker::StopDomoticzHardware()
 	std::vector<CDomoticzHardwareBase*>::iterator itt;
 	for (itt=m_hardwaredevices.begin(); itt!=m_hardwaredevices.end(); ++itt)
 	{
+#ifdef ENABLE_PYTHON
+		m_pluginsystem.DeregisterPlugin((*itt)->m_HwdID);
+#endif
 		(*itt)->Stop();
 		delete (*itt);
 	}
@@ -397,10 +405,10 @@ void MainWorker::RemoveDomoticzHardware(int HwdId)
 	int dpos=FindDomoticzHardware(HwdId);
 	if (dpos==-1)
 		return;
-	RemoveDomoticzHardware(m_hardwaredevices[dpos]);
-#ifdef USE_PYTHON_PLUGINS
+#ifdef ENABLE_PYTHON
 	m_pluginsystem.DeregisterPlugin(HwdId);
 #endif
+	RemoveDomoticzHardware(m_hardwaredevices[dpos]);
 }
 
 int MainWorker::FindDomoticzHardware(int HwdId)
@@ -481,10 +489,9 @@ bool MainWorker::GetSunSettings()
 {
 	int nValue;
 	std::string sValue;
-	if (!m_sql.GetPreferencesVar("Location",nValue,sValue))
-		return false;
 	std::vector<std::string> strarray;
-	StringSplit(sValue, ";", strarray);
+	if (m_sql.GetPreferencesVar("Location",nValue,sValue))
+		StringSplit(sValue, ";", strarray);
 
 	if (strarray.size() != 2)
 	{
@@ -688,6 +695,9 @@ bool MainWorker::AddHardwareFromParams(
 	case HTYPE_EVOHOME_SERIAL:
 		pHardware = new CEvohomeSerial(ID,SerialPort,Mode1,Filename);
 		break;
+	case HTYPE_EVOHOME_TCP:
+		pHardware = new CEvohomeTCP(ID, Address, Port, Filename);
+		break;
 	case HTYPE_RFLINKUSB:
 		pHardware = new CRFLinkSerial(ID, SerialPort);
 		break;
@@ -829,6 +839,10 @@ bool MainWorker::AddHardwareFromParams(
 		//LAN
 		pHardware = new CDenkoviSmartdenLan(ID, Address, Port, Password);
 		break;
+	case HTYPE_DenkoviSmartdenIPIn:
+		//LAN
+		pHardware = new CDenkoviSmartdenIPIn(ID, Address, Port, Password);
+		break;
 	case HTYPE_HEOS:
 		//HEOS by DENON
 		pHardware = new CHEOS(ID, Address, Port, Username, Password, Mode1, Mode2);
@@ -940,9 +954,9 @@ bool MainWorker::AddHardwareFromParams(
 		pHardware = new CGpio(ID, Mode1, Mode2, Mode3);
 #endif
 		break;
-	case HTYPE_SysfsGPIO:
-#ifdef WITH_SYSFS_GPIO
-		pHardware = new CSysfsGPIO(ID);
+	case HTYPE_SysfsGpio:
+#ifdef WITH_GPIO
+		pHardware = new CSysfsGpio(ID, Mode1, Mode2);
 #endif
 		break;
 	case HTYPE_Comm5TCP:
@@ -975,7 +989,7 @@ bool MainWorker::AddHardwareFromParams(
 		pHardware = new Yeelight(ID);
 		break;
 	case HTYPE_PythonPlugin:
-#ifdef USE_PYTHON_PLUGINS
+#ifdef ENABLE_PYTHON
 		pHardware = m_pluginsystem.RegisterPlugin(ID, Name, Filename);
 #endif
 	    break;
@@ -990,6 +1004,15 @@ bool MainWorker::AddHardwareFromParams(
 		break;
 	case HTYPE_IntergasInComfortLAN2RF:
 		pHardware = new CInComfort(ID, Address, Port);
+		break;
+	case HTYPE_EVOHOME_WEB:
+		pHardware = new CEvohomeWeb(ID, Username, Password, Mode1, Mode2, Mode3);
+		break;
+	case HTYPE_Rtl433:
+		pHardware = new CRtl433(ID,Filename);
+		break;
+	case HTYPE_OnkyoAVTCP:
+		pHardware = new OnkyoAVTCP(ID, Address, Port);
 		break;
 	}
 
@@ -1020,8 +1043,14 @@ bool MainWorker::Start()
 	m_notifications.Init();
 	GetSunSettings();
 	GetAvailableWebThemes();
-#ifdef USE_PYTHON_PLUGINS
-	m_pluginsystem.StartPluginSystem();
+#ifdef ENABLE_PYTHON
+	if (m_sql.m_bEnableEventSystem)
+	{
+		if (1 == 0)
+		{
+			m_pluginsystem.StartPluginSystem();
+		}
+	}
 #endif
 	AddAllDomoticzHardware();
 	m_fibaropush.Start();
@@ -1061,7 +1090,7 @@ bool MainWorker::Stop()
 		m_httppush.Stop();
 		m_influxpush.Stop();
 		m_googlepubsubpush.Stop();
-#ifdef USE_PYTHON_PLUGINS
+#ifdef ENABLE_PYTHON
 		m_pluginsystem.StopPluginSystem();
 #endif
 
@@ -1110,7 +1139,7 @@ bool MainWorker::StartThread()
 
 	//Start Scheduler
 	m_scheduler.StartScheduler();
-	m_eventsystem.SetEnabled(m_sql.m_bDisableEventSystem == false);
+	m_eventsystem.SetEnabled(m_sql.m_bEnableEventSystem);
 	m_cameras.ReloadCameras();
 
 	int rnvalue=0;
@@ -1487,7 +1516,7 @@ void MainWorker::Do_Work()
 			{
 				m_bStartHardware=false;
 				StartDomoticzHardware();
-#ifdef USE_PYTHON_PLUGINS
+#ifdef ENABLE_PYTHON
 				m_pluginsystem.AllPluginsStarted();
 #endif
 				ParseRFXLogFile();
@@ -2061,25 +2090,6 @@ void MainWorker::ProcessRXMessage(const CDomoticzHardwareBase *pHardware, const 
 
 	const_cast<CDomoticzHardwareBase *>(pHardware)->SetHeartbeatReceived();
 
-	char szDate[100]; szDate[0] = 0;
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	struct tm timeinfo;
-#ifdef WIN32
-	//Thanks to the winsock header file
-	time_t tv_sec = tv.tv_sec;
-	localtime_r(&tv_sec, &timeinfo);
-#else
-	localtime_r(&tv.tv_sec, &timeinfo);
-#endif
-	// create a time stamp string for the log message
-	if (_log.IsLogTimestampsEnabled())
-	{
-		snprintf(szDate, sizeof(szDate), "%04d-%02d-%02d %02d:%02d:%02d.%03d ",
-			timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-			timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec, (int)tv.tv_usec / 1000);
-	}
-
 	uint64_t DeviceRowIdx = -1;
 	std::string DeviceName = "";
 	tcp::server::CTCPClient *pClient2Ignore = NULL;
@@ -2368,16 +2378,14 @@ void MainWorker::ProcessRXMessage(const CDomoticzHardwareBase *pHardware, const 
 
 	if (pHardware->m_bOutputLog)
 	{
-		std::stringstream sTmp;
 		std::string sdevicetype = RFX_Type_Desc(pRXCommand[1], 1);
 		if (pRXCommand[1] == pTypeGeneral)
 		{
 			const _tGeneralDevice *pMeter = reinterpret_cast<const _tGeneralDevice*>(pRXCommand);
 			sdevicetype += "/" + std::string(RFX_Type_SubType_Desc(pMeter->type, pMeter->subtype));
 		}
-		if (szDate[0] != 0)
-			sTmp << szDate;
-		sTmp << " (" << pHardware->Name << ") " << sdevicetype << " (" << DeviceName << ")";
+		std::stringstream sTmp;
+		sTmp << "(" << pHardware->Name << ") " << sdevicetype << " (" << DeviceName << ")";
 		WriteMessageStart();
 		WriteMessage(sTmp.str().c_str());
 		WriteMessageEnd();
@@ -6230,6 +6238,19 @@ void MainWorker::decode_evohome2(const int HwdID, const _eHardwareTypes HwdType,
 						else
 							strarray[3]=szISODate;
 					}
+					else if ((pEvo->EVOHOME2.mode==pEvoHW->zmAuto) && (HwdType==HTYPE_EVOHOME_WEB) )
+					{
+						strarray[2]="FollowSchedule";
+						if( (pEvo->EVOHOME2.year!=0) && (pEvo->EVOHOME2.year!=0xFFFF) )
+						{
+							std::string szISODate(CEvohomeDateTime::GetISODate(pEvo->EVOHOME2));
+							if(strarray.size()<4) //add or set until
+								strarray.push_back(szISODate);
+							else
+								strarray[3]=szISODate;
+						}
+
+					}
 					else
 						if(strarray.size()>=4) //remove until
 							strarray.resize(3);
@@ -6253,6 +6274,7 @@ void MainWorker::decode_evohome2(const int HwdID, const _eHardwareTypes HwdType,
 	{
 		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q' WHERE (ID == %" PRIu64 ")",
 			name.c_str(), DevRowIdx);
+		procResult.DeviceName = name;
 	}
 	procResult.DeviceRowIdx = DevRowIdx;
 }
@@ -6264,7 +6286,7 @@ void MainWorker::decode_evohome1(const int HwdID, const _eHardwareTypes HwdType,
 	unsigned char devType=pTypeEvohome;
 	unsigned char subType=pEvo->EVOHOME1.subtype;
 	std::stringstream szID;
-	if (HwdType==HTYPE_EVOHOME_SERIAL)
+	if (HwdType==HTYPE_EVOHOME_SERIAL || HwdType==HTYPE_EVOHOME_TCP)
 		szID << std::hex << (int)RFX_GETID3(pEvo->EVOHOME1.id1,pEvo->EVOHOME1.id2,pEvo->EVOHOME1.id3);
 	else //GB3: web based evohome uses decimal device ID's
 		szID << std::dec << (int)RFX_GETID3(pEvo->EVOHOME1.id1,pEvo->EVOHOME1.id2,pEvo->EVOHOME1.id3);
@@ -6310,6 +6332,7 @@ void MainWorker::decode_evohome1(const int HwdID, const _eHardwareTypes HwdType,
 	{
 		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q' WHERE (ID == %" PRIu64 ")",
 			name.c_str(), DevRowIdx);
+		procResult.DeviceName = name;
 	}
 
 	CheckSceneCode(DevRowIdx,devType,subType,cmnd,"");
@@ -6327,7 +6350,7 @@ void MainWorker::decode_evohome1(const int HwdID, const _eHardwareTypes HwdType,
 			break;
 		}
 
-		if (HwdType==HTYPE_EVOHOME_SERIAL)
+		if (HwdType==HTYPE_EVOHOME_SERIAL || HwdType==HTYPE_EVOHOME_TCP)
 			sprintf(szTmp, "id            = %02X:%02X:%02X", pEvo->EVOHOME1.id1, pEvo->EVOHOME1.id2, pEvo->EVOHOME1.id3);
 		else //GB3: web based evohome uses decimal device ID's
 			sprintf(szTmp, "id            = %u", (int)RFX_GETID3(pEvo->EVOHOME1.id1,pEvo->EVOHOME1.id2,pEvo->EVOHOME1.id3));
@@ -9765,6 +9788,10 @@ void MainWorker::decode_General(const int HwdID, const _eHardwareTypes HwdType, 
 			return;
 		m_notifications.CheckAndHandleValueNotification(DevRowIdx, procResult.DeviceName, pMeter->intval2);
 	}
+	else if (subType == sTypeTextStatus)
+	{
+		DevRowIdx = m_sql.UpdateValue(HwdID, ID.c_str(), Unit, devType, subType, SignalLevel, BatteryLevel, pMeter->text, procResult.DeviceName);
+	}
 
 	if (m_verboselevel >= EVBL_ALL)
 	{
@@ -9878,6 +9905,11 @@ void MainWorker::decode_General(const int HwdID, const _eHardwareTypes HwdType, 
 		case sTypeZWaveAlarm:
 			WriteMessage("subtype       = Alarm");
 			sprintf(szTmp, "Level = %d (0x%02X)", pMeter->intval2, pMeter->intval2);
+			WriteMessage(szTmp);
+			break;
+		case sTypeTextStatus:
+			WriteMessage("subtype       = Text");
+			sprintf(szTmp, "Text = %s", pMeter->text);
 			WriteMessage(szTmp);
 			break;
 		default:
@@ -10838,7 +10870,7 @@ bool MainWorker::SwitchLightInt(const std::vector<std::string> &sd, std::string 
 	//
 	if (pHardware->HwdType == HTYPE_PythonPlugin)
 	{
-#ifdef USE_PYTHON_PLUGINS
+#ifdef ENABLE_PYTHON
 		((Plugins::CPlugin*)m_hardwaredevices[hindex])->SendCommand(Unit, switchcmd, level, hue);
 #endif
 		return true;
@@ -11612,16 +11644,19 @@ bool MainWorker::SwitchLightInt(const std::vector<std::string> &sd, std::string 
 		return true;
 	case pTypeGeneralSwitch:
 		{
+
 			_tGeneralSwitch gswitch;
 			gswitch.type = dType;
 			gswitch.subtype = dSubType;
 			gswitch.seqnbr = m_hardwaredevices[hindex]->m_SeqNr++;
 			gswitch.id = ID;
 			gswitch.unitcode = Unit;
+
 			if (!GetLightCommand(dType, dSubType, switchtype, switchcmd, gswitch.cmnd, options))
 				return false;
 
-			if ((switchtype != STYPE_Selector) && (dSubType != sSwitchGeneralSwitch)) {
+			if ((switchtype != STYPE_Selector) && (dSubType != sSwitchGeneralSwitch))
+			{
 				level = (level > 99) ? 99 : level;
 			}
 
@@ -11651,6 +11686,10 @@ bool MainWorker::SwitchLightInt(const std::vector<std::string> &sd, std::string 
 					}
 				}
 			}
+			else if (((switchtype == STYPE_BlindsPercentage) ||
+					(switchtype == STYPE_BlindsPercentageInverted)) &&
+					(gswitch.cmnd == gswitch_sSetLevel) && (level == 100))
+						gswitch.cmnd = gswitch_sOn;
 
 			gswitch.level = (unsigned char)level;
 			gswitch.rssi = 12;
@@ -11712,12 +11751,13 @@ bool MainWorker::SwitchModal(const std::string &idx, const std::string &status, 
 	if (pHardware==NULL)
 		return false;
 
+
 	unsigned long ID;
 	std::stringstream s_strid;
-	if (pHardware->HwdType==HTYPE_EVOHOME_SCRIPT) //GB3: scripted evohome uses decimal device ID's. We need to convert those to hex here to fit the 3-byte ID defined in the message struct
-		s_strid << std::hex << std::dec << sd[1];
-	else
+	if (pHardware->HwdType==HTYPE_EVOHOME_SERIAL || pHardware->HwdType==HTYPE_EVOHOME_TCP)
 		s_strid << std::hex << sd[1];
+	else  //GB3: web based evohome uses decimal device ID's. We need to convert those to hex here to fit the 3-byte ID defined in the message struct
+		s_strid << std::hex << std::dec << sd[1];
 	s_strid >> ID;
 
 	//Update Domoticz evohome Device
@@ -11812,21 +11852,25 @@ bool MainWorker::SetSetPoint(const std::string &idx, const float TempValue, cons
 	if (hindex==-1)
 		return false;
 
+	CDomoticzHardwareBase *pHardware=GetHardware(HardwareID);
+	if (pHardware==NULL)
+		return false;
+
 	unsigned long ID;
 	std::stringstream s_strid;
-	s_strid << std::hex << sd[1];
+	if (pHardware->HwdType==HTYPE_EVOHOME_SERIAL || pHardware->HwdType==HTYPE_EVOHOME_TCP)
+		s_strid << std::hex << sd[1];
+	else //GB3: web based evohome uses decimal device ID's. We need to convert those to hex here to fit the 3-byte ID defined in the message struct
+		s_strid << std::hex << std::dec << sd[1];
 	s_strid >> ID;
+
 
 	unsigned char Unit=atoi(sd[2].c_str());
 	unsigned char dType=atoi(sd[3].c_str());
 	unsigned char dSubType=atoi(sd[4].c_str());
 	//_eSwitchType switchtype=(_eSwitchType)atoi(sd[5].c_str());
 
-	CDomoticzHardwareBase *pHardware=GetHardware(HardwareID);
-	if (pHardware==NULL)
-		return false;
-
-	if (pHardware->HwdType == HTYPE_EVOHOME_SCRIPT || pHardware->HwdType == HTYPE_EVOHOME_SERIAL)
+	if (pHardware->HwdType == HTYPE_EVOHOME_SCRIPT || pHardware->HwdType == HTYPE_EVOHOME_SERIAL || pHardware->HwdType == HTYPE_EVOHOME_WEB || pHardware->HwdType == HTYPE_EVOHOME_TCP)
 	{
 		REVOBUF tsen;
 		memset(&tsen, 0, sizeof(tsen.EVOHOME2));
@@ -11888,7 +11932,7 @@ bool MainWorker::SetSetPointInt(const std::vector<std::string> &sd, const float 
 	//
 	if (pHardware->HwdType == HTYPE_PythonPlugin)
 	{
-#ifdef USE_PYTHON_PLUGINS
+#ifdef ENABLE_PYTHON
 		((Plugins::CPlugin*)pHardware)->SendCommand(Unit, "Set Level", TempValue);
 #endif
 	}
@@ -11903,9 +11947,12 @@ bool MainWorker::SetSetPointInt(const std::vector<std::string> &sd, const float 
 		(pHardware->HwdType == HTYPE_THERMOSMART) ||
 		(pHardware->HwdType == HTYPE_EVOHOME_SCRIPT) ||
 		(pHardware->HwdType == HTYPE_EVOHOME_SERIAL) ||
+		(pHardware->HwdType == HTYPE_EVOHOME_TCP) ||
+		(pHardware->HwdType == HTYPE_EVOHOME_WEB) ||
 		(pHardware->HwdType == HTYPE_Netatmo) ||
 		(pHardware->HwdType == HTYPE_NefitEastLAN) ||
-		(pHardware->HwdType == HTYPE_IntergasInComfortLAN2RF)
+		(pHardware->HwdType == HTYPE_IntergasInComfortLAN2RF) || 
+		(pHardware->HwdType == HTYPE_OpenWebNetTCP)
 		)
 	{
 		if (pHardware->HwdType == HTYPE_OpenThermGateway)
@@ -11958,7 +12005,7 @@ bool MainWorker::SetSetPointInt(const std::vector<std::string> &sd, const float 
 			CNefitEasy *pGateway = reinterpret_cast<CNefitEasy*>(pHardware);
 			pGateway->SetSetpoint(ID2, TempValue);
 		}
-		else if (pHardware->HwdType == HTYPE_EVOHOME_SCRIPT || pHardware->HwdType == HTYPE_EVOHOME_SERIAL)
+		else if (pHardware->HwdType == HTYPE_EVOHOME_SCRIPT || pHardware->HwdType == HTYPE_EVOHOME_SERIAL || pHardware->HwdType == HTYPE_EVOHOME_WEB || pHardware->HwdType == HTYPE_EVOHOME_TCP)
 		{
 			SetSetPoint(sd[7], TempValue, CEvohomeBase::zmPerm, "");
 		}
@@ -11966,6 +12013,11 @@ bool MainWorker::SetSetPointInt(const std::vector<std::string> &sd, const float 
 		{
 			CInComfort *pGateway = reinterpret_cast<CInComfort*>(pHardware);
 			pGateway->SetSetpoint(ID4, TempValue);
+		}
+		else if (pHardware->HwdType == HTYPE_OpenWebNetTCP)
+		{
+			COpenWebNetTCP *pGateway = reinterpret_cast<COpenWebNetTCP*>(pHardware);
+			return pGateway->SetSetpoint(ID4, TempValue);
 		}
 	}
 	else
@@ -12003,7 +12055,7 @@ bool MainWorker::SetSetPointInt(const std::vector<std::string> &sd, const float 
 			if (tSign == 'F')
 			{
 				//Convert to Celsius
-				tempDest = (tempDest - 32.0f) / 1.8f;
+				tempDest = static_cast<float>(ConvertToCelsius(tempDest));
 			}
 
 			_tThermostat tmeter;
@@ -12307,10 +12359,6 @@ bool MainWorker::SwitchScene(const uint64_t idx, const std::string &switchcmd)
 
 	m_sql.safe_query("INSERT INTO SceneLog (SceneRowID, nValue) VALUES ('%" PRIu64 "', '%d')", idx, nValue);
 
-	time_t now = time(0);
-	struct tm ltime;
-	localtime_r(&now,&ltime);
-
 	//first set actual scene status
 	std::string Name="Unknown?";
 	_eSceneGroupType scenetype = SGTYPE_SCENE;
@@ -12330,9 +12378,10 @@ bool MainWorker::SwitchScene(const uint64_t idx, const std::string &switchcmd)
 		m_sql.HandleOnOffAction((nValue==1),onaction,offaction);
 	}
 
-	m_sql.safe_query("UPDATE Scenes SET nValue=%d, LastUpdate='%04d-%02d-%02d %02d:%02d:%02d' WHERE (ID == %" PRIu64 ")",
+	std::string szLastUpdate = TimeToString(NULL, TF_DateTime);
+	m_sql.safe_query("UPDATE Scenes SET nValue=%d, LastUpdate='%q' WHERE (ID == %" PRIu64 ")",
 		nValue,
-		ltime.tm_year+1900,ltime.tm_mon+1, ltime.tm_mday, ltime.tm_hour, ltime.tm_min, ltime.tm_sec,
+		szLastUpdate.c_str(),
 		idx);
 
 	//Check if we need to email a snapshot of a Camera
@@ -12367,6 +12416,10 @@ bool MainWorker::SwitchScene(const uint64_t idx, const std::string &switchcmd)
 	}
 
 	_log.Log(LOG_NORM, "Activating Scene/Group: [%s]", Name.c_str());
+
+	bool bEventTrigger = true;
+	if (m_sql.m_bEnableEventSystem)
+		bEventTrigger = m_eventsystem.UpdateSceneGroup(idx, nValue, szLastUpdate);
 
 	//now switch all attached devices, and only the onces that do not trigger a scene
 	result = m_sql.safe_query(
@@ -12456,24 +12509,29 @@ bool MainWorker::SwitchScene(const uint64_t idx, const std::string &switchcmd)
 			if (switchtype != STYPE_PushOn)
 			{
 				int delay = (lstatus == "Off") ? offdelay : ondelay;
+				if (m_sql.m_bEnableEventSystem && !bEventTrigger)
+					m_eventsystem.SetEventTrigger(idx, m_eventsystem.REASON_DEVICE, static_cast<float>(delay));
 				SwitchLight(idx, lstatus, ilevel, hue, false, delay);
 				if (scenetype == SGTYPE_SCENE)
 				{
 					if ((lstatus != "Off") && (offdelay > 0))
 					{
 						//switch with on delay, and off delay
+						if (m_sql.m_bEnableEventSystem && !bEventTrigger)
+							m_eventsystem.SetEventTrigger(idx, m_eventsystem.REASON_DEVICE, static_cast<float>(ondelay + offdelay));
 						SwitchLight(idx, "Off", ilevel, hue, false, ondelay + offdelay);
 					}
 				}
 			}
 			else
 			{
+				if (m_sql.m_bEnableEventSystem && !bEventTrigger)
+					m_eventsystem.SetEventTrigger(idx, m_eventsystem.REASON_DEVICE, static_cast<float>(ondelay));
 				SwitchLight(idx, "On", ilevel, hue, false, ondelay);
 			}
 			sleep_milliseconds(50);
 		}
 	}
-
 	return true;
 }
 
@@ -12702,8 +12760,8 @@ void MainWorker::HeartbeatCheck()
 	time_t now;
 	mytime(&now);
 
-	typedef std::map<std::string, time_t>::iterator hb_components;
-	for (hb_components iterator = m_componentheartbeats.begin(); iterator != m_componentheartbeats.end(); ++iterator) {
+	std::map<std::string, time_t>::const_iterator iterator;
+	for (iterator = m_componentheartbeats.begin(); iterator != m_componentheartbeats.end(); ++iterator) {
 		double dif = difftime(now, iterator->second);
 		//_log.Log(LOG_STATUS, "%s last checking  %.2lf seconds ago", iterator->first.c_str(), dif);
 		if (dif > 60)
@@ -12954,6 +13012,19 @@ bool MainWorker::UpdateDevice(const int HardwareID, const std::string &DeviceID,
 				m_notifications.CheckAndHandleNotification(devidx, devname, devType, subType, NTYPE_USAGE, static_cast<float>(nValue));
 				return true;
 			}
+			else if (subType == sTypeTextStatus)
+			{
+				std::string sstatus = sValue;
+				if (sstatus.size() > 63)
+					sstatus = sstatus.substr(0, 63);
+				_tGeneralDevice gDevice;
+				gDevice.subtype = subType;
+				gDevice.id = unit;
+				gDevice.intval1 = static_cast<int>(ID);
+				strcpy(gDevice.text, sstatus.c_str());
+				DecodeRXMessage(pHardware, (const unsigned char *)&gDevice, NULL, batterylevel);
+				return true;
+			}
 		}
 		else if ((devType == pTypeAirQuality) && (subType == sTypeVoltcraft))
 		{
@@ -12963,7 +13034,42 @@ bool MainWorker::UpdateDevice(const int HardwareID, const std::string &DeviceID,
 		else if (devType == pTypeTEMP)
 		{
 			if (dID != 0)
+			{
 				m_notifications.CheckAndHandleNotification(dID, dName, devType, subType, NTYPE_TEMPERATURE, (float)atof(sValue.c_str()));
+			}
+		}
+		else if (devType == pTypeTEMP_HUM)
+		{
+			if (dID != 0)
+			{
+				std::vector<std::string> strarray;
+				StringSplit(sValue, ";", strarray);
+				if (strarray.size() == 3)
+				{
+					float Temp = (float)atof(strarray[0].c_str());
+					int Hum = atoi(strarray[1].c_str());
+					m_notifications.CheckAndHandleTempHumidityNotification(dID, dName, Temp, Hum, true, true);
+					float dewpoint = (float)CalculateDewPoint(Temp, Hum);
+					m_notifications.CheckAndHandleDewPointNotification(dID, dName, Temp, dewpoint);
+				}
+			}
+		}
+		else if (devType == pTypeTEMP_HUM_BARO)
+		{
+			if (dID != 0)
+			{
+				std::vector<std::string> strarray;
+				StringSplit(sValue, ";", strarray);
+				if (strarray.size() == 5)
+				{
+					float Temp = (float)atof(strarray[0].c_str());
+					int Hum = atoi(strarray[1].c_str());
+					m_notifications.CheckAndHandleTempHumidityNotification(dID, dName, Temp, Hum, true, true);
+					float dewpoint = (float)CalculateDewPoint(Temp, Hum);
+					m_notifications.CheckAndHandleDewPointNotification(dID, dName, Temp, dewpoint);
+					m_notifications.CheckAndHandleNotification(dID, dName, devType, subType, NTYPE_BARO, (float)atof(strarray[3].c_str()));
+				}
+			}
 		}
 /*
 		else if (devType == pTypeGeneralSwitch)
@@ -13029,8 +13135,3 @@ bool MainWorker::UpdateDevice(const int HardwareID, const std::string &DeviceID,
 	}
 	return true;
 }
-
-
-
-
-
