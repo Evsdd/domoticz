@@ -1377,7 +1377,7 @@ bool CEvohomeRadio::DecodeHeatDemand(CEvohomeMsg &msg)
 	return true;
 }
 
-bool CEvohome::DecodeHeatDemand8(CEvohomeMsg &msg)
+bool CEvohomeRadio::DecodeHeatDemand8(CEvohomeMsg &msg)
 {
 	char tag[] = "HEAT_DEMAND";
 
