@@ -54,7 +54,6 @@ m_bForceSingleStation(false),
 m_bFirstTime(true)
 {
 	m_HwdID = ID;
-	m_stoprequested = false;
 	Init();
 }
 
@@ -69,9 +68,12 @@ void CWunderground::Init()
 
 bool CWunderground::StartHardware()
 {
+	RequestStart();
+
 	Init();
 	//Start worker thread
-	m_thread = boost::shared_ptr<boost::thread>(new boost::thread(boost::bind(&CWunderground::Do_Work, this)));
+	m_thread = std::make_shared<std::thread>(&CWunderground::Do_Work, this);
+	SetThreadNameInt(m_thread->native_handle());
 	if (!m_thread)
 		return false;
 	m_bIsStarted=true;
@@ -81,11 +83,11 @@ bool CWunderground::StartHardware()
 
 bool CWunderground::StopHardware()
 {
-	if (m_thread!=NULL)
+	if (m_thread)
 	{
-		assert(m_thread);
-		m_stoprequested = true;
+		RequestStop();
 		m_thread->join();
+		m_thread.reset();
 	}
     m_bIsStarted=false;
     return true;
@@ -96,9 +98,8 @@ void CWunderground::Do_Work()
 	int sec_counter = 590;
 	_log.Log(LOG_STATUS, "Wunderground: Worker started...");
 
-	while (!m_stoprequested)
+	while (!IsStopRequested(1000))
 	{
-		sleep_seconds(1);
 		sec_counter++;
 		if (sec_counter % 10 == 0) {
 			m_LastHeartbeat=mytime(NULL);
@@ -269,7 +270,7 @@ void CWunderground::GetMeterDetails()
 			else if (forcasticon=="clear")
 			{
 				barometric_forcast=baroForecastSunny;
-			}			
+			}
 			else if (forcasticon=="rain")
 			{
 				barometric_forcast=baroForecastRain;
@@ -295,8 +296,6 @@ void CWunderground::GetMeterDetails()
 
 	//Wind
 	int wind_degrees=-1;
-	float wind_mph=-1;
-	float wind_gust_mph=-1;
 	float windspeed_ms=0;
 	float windgust_ms=0;
 	float wind_temp=temp;
@@ -315,9 +314,8 @@ void CWunderground::GetMeterDetails()
 			float temp_wind_mph = static_cast<float>(atof(root["current_observation"]["wind_mph"].asString().c_str()));
 			if (temp_wind_mph!=-9999.00f)
 			{
-				wind_mph=temp_wind_mph;
 				//convert to m/s
-				windspeed_ms=wind_mph*0.44704f;
+				windspeed_ms=temp_wind_mph*0.44704f;
 			}
 		}
 	}
@@ -328,9 +326,8 @@ void CWunderground::GetMeterDetails()
 			float temp_wind_gust_mph = static_cast<float>(atof(root["current_observation"]["wind_gust_mph"].asString().c_str()));
 			if (temp_wind_gust_mph!=-9999.00f)
 			{
-				wind_gust_mph=temp_wind_gust_mph;
 				//convert to m/s
-				windgust_ms=wind_gust_mph*0.44704f;
+				windgust_ms=temp_wind_gust_mph*0.44704f;
 			}
 		}
 	}

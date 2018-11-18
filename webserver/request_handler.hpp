@@ -12,12 +12,11 @@
 #define HTTP_REQUEST_HANDLER_HPP
 
 #include <string>
-#include <vector>
-#include <boost/noncopyable.hpp>
+#include "../main/Noncopyable.h"
 #ifndef WEBSERVER_DONT_USE_ZIP
-	#include "zip/unzip.h"
+	#include <unzip.h>
 	#define USEWIN32IOAPI
-	#include "zip/iowin32.h"
+	#include <iowin32.h>
 #endif
 
 namespace http {
@@ -36,7 +35,7 @@ struct modify_info {
 
 /// The common handler for all incoming requests.
 class request_handler
-  : private boost::noncopyable
+  : private domoticz::noncopyable
 {
 public:
   /// Construct with a directory containing files to be served.
@@ -53,11 +52,17 @@ public:
   
   /// The directory containing the files to be served.
   std::string doc_root_;
+
+  // expose myWebem so we can use it in websocket connections
+  cWebem* Get_myWebem();
+
+protected:
+  // Webem link to application code
+  cWebem* myWebem;
+
 private:
-	bool not_modified(std::string full_path, const request &req, reply &rep, modify_info &mInfo);
-	// Webem link to application code
-	cWebem* myWebem;
-	  //zip support
+	bool not_modified(const std::string &full_path, const request &req, reply &rep, modify_info &mInfo);
+	//zip support
 #ifndef WEBSERVER_DONT_USE_ZIP
 	  zlib_filefunc_def m_ffunc;
 	  unzFile m_uf;

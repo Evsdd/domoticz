@@ -81,7 +81,7 @@ namespace OpenZWave
 		bool GetChangeVerified() { return m_verifyChanges; }
 
 		virtual string const GetAsString() const { return ""; }
-		virtual bool SetFromString( string const& _value ) { return false; }
+		virtual bool SetFromString( string const& ) { return false; }
 
 		bool Set();							// For the user to change a value in a device
 
@@ -99,7 +99,7 @@ namespace OpenZWave
 		void SetCheckingChange( bool _check ) { m_checkChange = _check; }
 		void OnValueRefreshed();			// A value in a device has been refreshed
 		void OnValueChanged();				// The refreshed value actually changed
-		int VerifyRefreshedValue( void* _originalValue, void* _checkValue, void* _newValue, ValueID::ValueType _type, int _length = 0 );
+		int VerifyRefreshedValue( void* _originalValue, void* _checkValue, void* _newValue, ValueID::ValueType _type, int _originalValueLength = 0, int _checkValueLength = 0, int _newValueLength = 0 );
 
 		int32		m_min;
 		int32		m_max;

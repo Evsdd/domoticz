@@ -13,8 +13,8 @@
 #pragma once
 
 #include "EvohomeBase.h"
-#include "../json/json.h"
 
+#include "../json/json.h"
 
 class CEvohomeWeb : public CEvohomeBase
 {
@@ -62,12 +62,12 @@ class CEvohomeWeb : public CEvohomeBase
 public:
 	CEvohomeWeb(const int ID, const std::string &Username, const std::string &Password, const unsigned int refreshrate, const int UseFlags, const unsigned int installation);
 	~CEvohomeWeb(void);
-	bool WriteToHardware(const char *pdata, const unsigned char length);
+	bool WriteToHardware(const char *pdata, const unsigned char length) override;
 private:
 	// base functions
 	void Init();
-	bool StartHardware();
-	bool StopHardware();
+	bool StartHardware() override;
+	bool StopHardware() override;
 	void Do_Work();
 
 	// evohome web commands
@@ -89,27 +89,27 @@ private:
 
 	bool full_installation();
 	bool get_status(int location);
-	bool get_status(std::string locationId);
+	bool get_status(const std::string &locationId);
 
-	zone* get_zone_by_ID(std::string zoneId);
+	zone* get_zone_by_ID(const std::string &zoneId);
 
 	bool has_dhw(temperatureControlSystem *tcs);
 
-	bool get_dhw_schedule(std::string dhwId);
-	bool get_zone_schedule(std::string zoneId);
-	bool get_zone_schedule(std::string zoneId, std::string zoneType);
+	bool get_dhw_schedule(const std::string &dhwId);
+	bool get_zone_schedule(const std::string &zoneId);
+	bool get_zone_schedule(const std::string &zoneId, const std::string &zoneType);
 	std::string get_next_switchpoint(temperatureControlSystem* tcs, int zone);
 	std::string get_next_switchpoint(zone* hz);
 	std::string get_next_switchpoint(Json::Value &schedule);
 	std::string get_next_switchpoint_ex(Json::Value &schedule, std::string &current_setpoint);
 
 
-	bool set_system_mode(std::string systemId, int mode);
-	bool set_temperature(std::string zoneId, std::string temperature, std::string time_until);
-	bool cancel_temperature_override(std::string zoneId);
-	bool set_dhw_mode(std::string dhwId, std::string mode, std::string time_until);
+	bool set_system_mode(const std::string &systemId, int mode);
+	bool set_temperature(const std::string &zoneId, const std::string &temperature, const std::string &time_until);
+	bool cancel_temperature_override(const std::string &zoneId);
+	bool set_dhw_mode(const std::string &dhwId, const std::string &mode, const std::string &time_until);
 
-	bool verify_datetime(std::string datetime);
+	bool verify_datetime(const std::string &datetime);
 
 	// status readers
 	void DecodeControllerMode(temperatureControlSystem* tcs);
@@ -118,10 +118,12 @@ private:
 
 	// helpers
 	uint8_t GetUnit_by_ID(unsigned long evoID);
-	std::string local_to_utc(std::string local_time);
+	std::string local_to_utc(const std::string &local_time);
 
-	boost::shared_ptr<boost::thread> m_thread;
-	volatile bool m_stoprequested;
+	bool v1_login(const std::string &user, const std::string &password);
+	void get_v1_temps();
+private:
+	std::shared_ptr<std::thread> m_thread;
 
 	std::string m_username;
 	std::string m_password;
@@ -164,8 +166,5 @@ private:
 	// Evohome v1 API
 	std::string m_v1uid;
 	std::vector<std::string> m_v1SessionHeaders;
-
-	bool v1_login(const std::string &user, const std::string &password);
-	void get_v1_temps();
 };
 

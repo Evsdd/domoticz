@@ -52,7 +52,6 @@ m_APIKey(APIKey),
 m_Location(Location)
 {
 	m_HwdID=ID;
-	m_stoprequested=false;
 	Init();
 }
 
@@ -66,21 +65,24 @@ void CDarkSky::Init()
 
 bool CDarkSky::StartHardware()
 {
+	RequestStart();
+
 	Init();
 	//Start worker thread
-	m_thread = boost::shared_ptr<boost::thread>(new boost::thread(boost::bind(&CDarkSky::Do_Work, this)));
+	m_thread = std::make_shared<std::thread>(&CDarkSky::Do_Work, this);
+	SetThreadNameInt(m_thread->native_handle());
 	m_bIsStarted=true;
 	sOnConnected(this);
-	return (m_thread!=NULL);
+	return (m_thread != nullptr);
 }
 
 bool CDarkSky::StopHardware()
 {
-	if (m_thread!=NULL)
+	if (m_thread)
 	{
-		assert(m_thread);
-		m_stoprequested = true;
+		RequestStop();
 		m_thread->join();
+		m_thread.reset();
 	}
     m_bIsStarted=false;
     return true;
@@ -88,12 +90,11 @@ bool CDarkSky::StopHardware()
 
 void CDarkSky::Do_Work()
 {
-	_log.Log(LOG_STATUS, "DarkSky: Started...");
+	Log(LOG_STATUS, "Started...");
 
 	int sec_counter = 290;
-	while (!m_stoprequested)
+	while (!IsStopRequested(1000))
 	{
-		sleep_seconds(1);
 		sec_counter++;
 		if (sec_counter % 12 == 0) {
 			m_LastHeartbeat = mytime(NULL);
@@ -103,10 +104,10 @@ void CDarkSky::Do_Work()
 			GetMeterDetails();
 		}
 	}
-	_log.Log(LOG_STATUS,"DarkSky: Worker stopped...");
+	Log(LOG_STATUS,"Worker stopped...");
 }
 
-bool CDarkSky::WriteToHardware(const char *pdata, const unsigned char length)
+bool CDarkSky::WriteToHardware(const char* /*pdata*/, const unsigned char /*length*/)
 {
 	return false;
 }
@@ -136,13 +137,13 @@ void CDarkSky::GetMeterDetails()
 		bret = HTTPClient::GET(szURL, sResult);
 		if (!bret)
 		{
-			_log.Log(LOG_ERROR, "DarkSky: Error getting http data!.");
+			Log(LOG_ERROR, "Error getting http data!.");
 			return;
 		}
 	}
 	catch (...)
 	{
-		_log.Log(LOG_ERROR, "DarkSky: Error getting http data!");
+		Log(LOG_ERROR, "Error getting http data!");
 		return;
 	}
 #ifdef DEBUG_DarkSkyW
@@ -156,12 +157,12 @@ void CDarkSky::GetMeterDetails()
 	bool ret=jReader.parse(sResult,root);
 	if ((!ret) || (!root.isObject()))
 	{
-		_log.Log(LOG_ERROR,"DarkSky: Invalid data received! Check Location, use a City or GPS Coordinates (xx.yyyy,xx.yyyyy)");
+		Log(LOG_ERROR,"Invalid data received! Check Location, use a City or GPS Coordinates (xx.yyyy,xx.yyyyy)");
 		return;
 	}
 	if (root["currently"].empty()==true)
 	{
-		_log.Log(LOG_ERROR,"DarkSky: Invalid data received, or unknown location!");
+		Log(LOG_ERROR,"Invalid data received, or unknown location!");
 		return;
 	}
 	/*
@@ -236,14 +237,12 @@ void CDarkSky::GetMeterDetails()
 
 	//Wind
 	int wind_degrees=-1;
-	float wind_mph=-1;
-	float wind_gust_mph=-1;
 	float windspeed_ms=0;
 	float windgust_ms=0;
 	float wind_temp=temp;
 	float wind_chill=temp;
-	int windgust=1;
-	float windchill=-1;
+	//int windgust=1;
+	//float windchill=-1;
 
 	if (root["currently"]["windBearing"].empty()==false)
 	{
@@ -256,9 +255,8 @@ void CDarkSky::GetMeterDetails()
 			float temp_wind_mph = static_cast<float>(atof(root["currently"]["windSpeed"].asString().c_str()));
 			if (temp_wind_mph!=-9999.00f)
 			{
-				wind_mph=temp_wind_mph;
 				//convert to m/s
-				windspeed_ms=wind_mph*0.44704f;
+				windspeed_ms=temp_wind_mph*0.44704f;
 			}
 		}
 	}
@@ -269,9 +267,8 @@ void CDarkSky::GetMeterDetails()
 			float temp_wind_gust_mph = static_cast<float>(atof(root["currently"]["windGust"].asString().c_str()));
 			if (temp_wind_gust_mph!=-9999.00f)
 			{
-				wind_gust_mph=temp_wind_gust_mph;
 				//convert to m/s
-				windgust_ms=wind_gust_mph*0.44704f;
+				windgust_ms=temp_wind_gust_mph*0.44704f;
 			}
 		}
 	}
@@ -402,13 +399,10 @@ void CDarkSky::GetMeterDetails()
 	{
 		if ((root["currently"]["ozone"] != "N/A") && (root["currently"]["ozone"] != "--"))
 		{
-			float radiation = static_cast<float>(atof(root["currently"]["ozone"].asString().c_str()));	//this is in dobson units, need to convert to Watt/m2? (2.69×(10^20) ?
+			float radiation = static_cast<float>(atof(root["currently"]["ozone"].asString().c_str()));
 			if (radiation>=0.0f)
 			{
-				_tGeneralDevice gdevice;
-				gdevice.subtype=sTypeSolarRadiation;
-				gdevice.floatval1=radiation;
-				sDecodeRXMessage(this, (const unsigned char *)&gdevice, NULL, 255);
+				SendCustomSensor(1, 0, 255, radiation, "Ozone Sensor", "DU"); //(dobson units)
 			}
 		}
 	}

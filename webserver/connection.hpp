@@ -13,13 +13,12 @@
 
 #include <boost/asio.hpp>
 #include <boost/array.hpp>
-#include <boost/noncopyable.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/enable_shared_from_this.hpp>
+#include <queue>
 #include "reply.hpp"
 #include "request.hpp"
 #include "request_handler.hpp"
 #include "request_parser.hpp"
+#include "Websockets.hpp"
 #ifdef WWW_ENABLE_SSL
 #include <boost/asio/ssl.hpp>
 typedef boost::asio::ssl::stream<boost::asio::ip::tcp::socket> ssl_socket;
@@ -29,11 +28,12 @@ namespace http {
 namespace server {
 
 class connection_manager;
+class CWebsocket;
 
 /// Represents a single connection from a client.
 class connection
-  : public boost::enable_shared_from_this<connection>,
-    private boost::noncopyable
+  : public std::enable_shared_from_this<connection>,
+    private domoticz::noncopyable
 {
 public:
   /// Construct a connection with the given io_service.
@@ -58,6 +58,13 @@ public:
   /// Stop all asynchronous operations associated with the connection.
   void stop();
 
+  // send packet over websocket
+  void WS_Write(const std::string &packet_data);
+  /// Add content to write buffer
+  void MyWrite(const std::string &buf);
+  /// Timer handlers
+  void handle_timeout(const boost::system::error_code& error);
+
   /// Timer handlers
   void handle_read_timeout(const boost::system::error_code& error);
   void handle_abandoned_timeout(const boost::system::error_code& error);
@@ -68,7 +75,14 @@ private:
   void read_more();
 
   /// Handle completion of a write operation.
-  void handle_write(const boost::system::error_code& e);
+  void handle_write(const boost::system::error_code& e, size_t bytes_transferred);
+  /// Protect the write queue
+  std::mutex writeMutex;
+  /// Is protected by writeMutex
+  std::queue<std::string> writeQ;
+  /// indicates if we are currently writing
+  bool write_in_progress;
+  void SocketWrite(const std::string &buf);
 
 	/// Initialize read timeout timer
 	void set_read_timeout();
@@ -113,8 +127,8 @@ private:
   /// The parser for the incoming request.
   request_parser request_parser_;
 
-  /// The reply to be sent back to the client.
-  reply reply_;
+  /// our write buffer
+  std::string write_buffer;
 
   /// The buffer that we receive data in
   boost::asio::streambuf _buf;
@@ -141,9 +155,17 @@ private:
   ssl_socket *sslsocket_;
   void handle_handshake(const boost::system::error_code& error);
 #endif
+
+  /// websocket stuff
+  CWebsocket websocket_parser;
+  enum {
+	  connection_http,
+	  connection_websocket,
+	  connection_closing
+  } connection_type;
 };
 
-typedef boost::shared_ptr<connection> connection_ptr;
+typedef std::shared_ptr<connection> connection_ptr;
 
 } // namespace server
 } // namespace http

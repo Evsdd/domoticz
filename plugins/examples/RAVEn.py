@@ -6,7 +6,7 @@
 #   Plugin parameter definition below will be parsed during startup and copied into Manifest.xml, this will then drive the user interface in the Hardware web page
 #
 """
-<plugin key="RAVEn" name="RAVEn Zigbee energy monitor" author="dnpwwo" version="1.2.5" externallink="https://rainforestautomation.com/rfa-z106-raven/">
+<plugin key="RAVEn" name="RAVEn Zigbee energy monitor" author="dnpwwo" version="1.4.0" externallink="https://rainforestautomation.com/rfa-z106-raven/">
     <params>
         <param field="SerialPort" label="Serial Port" width="150px" required="true" default="/dev/ttyRAVEn"/>
         <param field="Mode6" label="Debug" width="100px">
@@ -28,7 +28,8 @@ demandFreq=30       # seconds between demand events
 summaryFreq=300     # seconds between summary updates
 fScale = demandFreq / 3600.0
 summation = 0.0
-connectStatus = "Disconnected"
+hasConnected = False
+nextCommand = ""
 
 def onStart():
     global SerialConn
@@ -44,37 +45,50 @@ def onStart():
         Domoticz.Log("Devices created.")
     Domoticz.Log("Plugin has " + str(len(Devices)) + " devices associated with it.")
     DumpConfigToLog()
+    for Device in Devices:
+        Devices[Device].Update(nValue=Devices[Device].nValue, sValue=Devices[Device].sValue, TimedOut=1)
     SerialConn = Domoticz.Connection(Name="RAVEn", Transport="Serial", Protocol="XML", Address=Parameters["SerialPort"], Baud=115200)
     SerialConn.Connect()
     return
 
 def onConnect(Connection, Status, Description):
+    global SerialConn
     if (Status == 0):
         Domoticz.Log("Connected successfully to: "+Parameters["SerialPort"])
-        Connection.Send("<Command>\n  <Name>get_device_info</Name>\n</Command>")
+        Connection.Send("<Command>\n  <Name>restart</Name>\n</Command>")
+        SerialConn = Connection
     else:
         Domoticz.Log("Failed to connect ("+str(Status)+") to: "+Parameters["SerialPort"])
         Domoticz.Debug("Failed to connect ("+str(Status)+") to: "+Parameters["SerialPort"]+" with error: "+Description)
     return True
 
 def onMessage(Connection, Data):
-    global connectStatus, fScale, summation
+    global hasConnected, nextCommand, fScale, summation
     strData = Data.decode("utf-8", "ignore")
     LogMessage(strData)
     xmltree = ET.fromstring(strData)
-    if xmltree.tag == 'DeviceInfo':
+    if xmltree.tag == 'ConnectionStatus':
+        strLog = ""
+        if (xmltree.find('MeterMacId') != None): strLog = "MeterMacId: "+xmltree.find('MeterMacId').text+", "
+        connectStatus = xmltree.find('Status').text
+        strLog += "Connection Status = '"+connectStatus+"'"
+        if (xmltree.find('Description') != None): strLog += " - "+xmltree.find('Description').text
+        if (xmltree.find('LinkStrength') != None): strLog += ", Link Strength = "+str(int(xmltree.find('LinkStrength').text,16))
+        Domoticz.Log(strLog)
+        if connectStatus == 'Initializing...':
+            hasConnected = False
+        elif (connectStatus == 'Connected') and (hasConnected == False):
+            nextCommand = "get_device_info"
+            hasConnected = True
+    elif xmltree.tag == 'DeviceInfo':
         Domoticz.Log( "Manufacturer: %s, Device ID: %s, Install Code: %s" % (xmltree.find('Manufacturer').text, xmltree.find('DeviceMacId').text, xmltree.find('InstallCode').text) )
         Domoticz.Log( "Hardware: Version %s, Firmware Version: %s, Model: %s" % (xmltree.find('HWVersion').text, xmltree.find('FWVersion').text, xmltree.find('ModelId').text) )
-        Connection.Send("<Command>\n  <Name>get_network_info</Name>\n</Command>\n")
+        nextCommand = "get_network_info"
     elif xmltree.tag == 'NetworkInfo':
         LogMessage( "NetworkInfo response, Status = '%s' - %s, Link Strength = %d" % (xmltree.find('Status').text, xmltree.find('Description').text, int(xmltree.find('LinkStrength').text,16)))
-        Connection.Send("<Command>\n  <Name>get_connection_status</Name>\n</Command>\n")
-    elif xmltree.tag == 'ConnectionStatus':
-        if connectStatus != 'Connected':
-            Connection.Send("<Command>\n  <Name>get_meter_list</Name>\n</Command>\n")
-        connectStatus = xmltree.find('Status').text
-        Domoticz.Log( "MeterMacId: %s, Connection Status, Status = '%s' - %s, Link Strength = %d" % (xmltree.find('MeterMacId').text, xmltree.find('Status').text, xmltree.find('Description').text, int(xmltree.find('LinkStrength').text,16)))
+        nextCommand = "get_meter_list"
     elif xmltree.tag == 'MeterList':
+        nextCommand = ""
         for meter in xmltree.iter('MeterMacId'):
             LogMessage( "MeterMacId: %s, MeterList response" % meter.text)
             Connection.Send("<Command>\n  <Name>get_meter_info</Name>\n  <MeterMacId>"+meter.text+"</MeterMacId>\n</Command>\n")
@@ -101,14 +115,15 @@ def onMessage(Connection, Data):
           summation = summation + delta
           Domoticz.Log( "MeterMacId: %s, Instantaneous Demand = %.3f, Summary Total = %.3f, Delta = %f" % (xmltree.find('MeterMacId').text, demand, summation, delta))
           sValue = "%.3f;%.3f" % (demand,summation)
-          Devices[1].Update(0, sValue.replace('.',''))
+          Devices[1].Update(nValue=0, sValue=sValue.replace('.',''), TimedOut=0)
     elif xmltree.tag == 'CurrentSummationDelivered':
         total = float(getCurrentSummationKWh(xmltree))
         if (total > summation):
           summation = total
         sValue = "%.3f" % (total)
-        Devices[2].Update(0, sValue.replace('.',''))
+        Devices[2].Update(nValue=0, sValue=sValue.replace('.',''), TimedOut=0)
         Domoticz.Log( "MeterMacId: %s, Current Summation = %.3f" % (xmltree.find('MeterMacId').text, total))
+
     elif xmltree.tag == 'TimeCluster':
       Domoticz.Debug( xmltree.tag + " response" )
     elif xmltree.tag == 'PriceCluster':
@@ -124,12 +139,19 @@ def onMessage(Connection, Data):
     return
 
 def onDisconnect(Connection):
+    for Device in Devices:
+        Devices[Device].Update(nValue=Devices[Device].nValue, sValue=Devices[Device].sValue, TimedOut=1)
     Domoticz.Log("Connection '"+Connection.Name+"' disconnected.")
     return
 
 def onHeartbeat():
-    global SerialConn
-    if (SerialConn.Connected() != True):
+    global hasConnected, nextCommand, SerialConn
+    if (SerialConn.Connected()):
+        if (nextCommand != ""):
+            Domoticz.Debug("Sending command: "+nextCommand)
+            SerialConn.Send("<Command>\n  <Name>"+nextCommand+"</Name>\n</Command>\n")
+    else:
+        hasConnected = False
         SerialConn.Connect()
     return True
 

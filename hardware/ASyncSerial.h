@@ -2,12 +2,13 @@
 #ifndef ASYNCSERIAL_H
 #define	ASYNCSERIAL_H
 
-#include <vector>
-#include <boost/asio.hpp>
-#include <boost/bind.hpp>
-#include <boost/utility.hpp>
-#include <boost/function.hpp>
-#include <boost/shared_array.hpp>
+#include <stddef.h>                              // for size_t
+#include "../main/Noncopyable.h"
+#include <boost/asio/serial_port_base.hpp>       // for serial_port_base
+#include <boost/smart_ptr/shared_ptr.hpp>        // for shared_ptr
+#include <boost/function/function_fwd.hpp>       // for function
+#include <boost/exception/diagnostic_information.hpp> //for exception printing
+namespace boost { namespace system { class error_code; } }
 
 /**
  * Used internally (pimpl)
@@ -18,7 +19,8 @@ class AsyncSerialImpl;
  * Asynchronous serial class.
  * Intended to be a base class.
  */
-class AsyncSerial: private boost::noncopyable
+class AsyncSerial
+	: private domoticz::noncopyable
 {
 public:
     AsyncSerial();
@@ -164,7 +166,7 @@ private:
      */
     void writeEnd(const boost::system::error_code& error);
 
-    boost::shared_ptr<AsyncSerialImpl> pimpl;
+	std::shared_ptr<AsyncSerialImpl> pimpl;
 
     /**
      * To allow derived classes to report errors

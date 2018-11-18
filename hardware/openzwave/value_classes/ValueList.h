@@ -70,19 +70,18 @@ namespace OpenZWave
 
 		Item const* GetItem() const;
 
-		int32 const GetItemIdxByLabel( string const& _label );
-		int32 const GetItemIdxByValue( int32 const _value );
+		int32 GetItemIdxByLabel( string const& _label ) const;
+		int32 GetItemIdxByValue( int32 const _value ) const;
 
 		bool GetItemLabels( vector<string>* o_items );
 		bool GetItemValues( vector<int32>* o_values );
 
-		uint8 const GetSize()const{ return m_size; }
+		uint8 GetSize()const{ return m_size; }
 
 	private:
 		vector<Item>	m_items;
 		int32			m_valueIdx;					// the current index in the m_items vector
 		int32			m_valueIdxCheck;			// the previous index in the m_items vector (used for double-checking spurious value reads)
-		int32			m_newValueIdx;				// a new value to be set on the appropriate device
 		uint8			m_size;
 	};
 

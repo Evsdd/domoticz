@@ -17,12 +17,11 @@
 //#define DEBUG_InComfort
 #endif
 
-CInComfort::CInComfort(const int ID, const std::string &IPAddress, const unsigned short usIPPort)
+CInComfort::CInComfort(const int ID, const std::string &IPAddress, const unsigned short usIPPort):
+m_szIPAddress(IPAddress)
 {
 	m_HwdID = ID;
-	m_szIPAddress = IPAddress;
 	m_usIPPort = usIPPort;
-	m_stoprequested = false;
 
 	m_LastUpdateFrequentChangingValues = 0;
 	m_LastUpdateSlowChangingValues = 0;
@@ -35,7 +34,6 @@ CInComfort::CInComfort(const int ID, const std::string &IPAddress, const unsigne
 	m_LastCentralHeatingTemperature = 0.0;
 	m_LastCentralHeatingPressure = 0.0;
 	m_LastTapWaterTemperature = 0.0;
-	m_LastStatusText = "";
 	m_LastIO = 0;
 
 	Init();
@@ -47,26 +45,28 @@ CInComfort::~CInComfort(void)
 
 void CInComfort::Init()
 {
-	m_stoprequested = false;
 }
 
 bool CInComfort::StartHardware()
 {
+	RequestStart();
+
 	Init();
 	//Start worker thread
-	m_thread = boost::shared_ptr<boost::thread>(new boost::thread(boost::bind(&CInComfort::Do_Work, this)));
+	m_thread = std::make_shared<std::thread>(&CInComfort::Do_Work, this);
+	SetThreadNameInt(m_thread->native_handle());
 	m_bIsStarted = true;
 	sOnConnected(this);
-	return (m_thread != NULL);
+	return (m_thread != nullptr);
 }
 
 bool CInComfort::StopHardware()
 {
-	if (m_thread != NULL)
+	if (m_thread)
 	{
-		assert(m_thread);
-m_stoprequested = true;
-m_thread->join();
+		RequestStop();
+		m_thread->join();
+		m_thread.reset();
 	}
 	m_bIsStarted = false;
 	return true;
@@ -78,9 +78,8 @@ void CInComfort::Do_Work()
 {
 	int sec_counter = 0;
 	_log.Log(LOG_STATUS, "InComfort: Worker started...");
-	while (!m_stoprequested)
+	while (!IsStopRequested(1000))
 	{
-		sleep_seconds(1);
 		sec_counter++;
 		if (sec_counter % 12 == 0) {
 			mytime(&m_LastHeartbeat);
@@ -213,7 +212,7 @@ void CInComfort::ParseAndUpdateDevices(std::string jsonData)
 		}
 
 
-	// Compare the time of the last update to the current time. 
+	// Compare the time of the last update to the current time.
 	// For items changing frequently, update the value every 5 minutes, for all others update every 15 minutes
 	time_t currentTime = mytime(NULL);
 	bool updateFrequentChangingValues = (currentTime - m_LastUpdateFrequentChangingValues) >= 300;

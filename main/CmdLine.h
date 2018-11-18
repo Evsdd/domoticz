@@ -110,10 +110,8 @@
 // tell the compiler to shut up
 #pragma warning(disable:4786)
 
-//#include <iostream> // you may need this
-#include <map>
+//#include <iosfwd> // you may need this
 #include <string>
-#include <vector>
 
 // handy little container for our argument vector
 struct CCmdParam
