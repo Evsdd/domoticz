@@ -145,16 +145,14 @@ bool CEvohomeRadio::StartHardware()
 		{
 			s_strid >> m_nDevID;
 			SetControllerID(m_nDevID);
-			// Log(true, LOG_STATUS, "evohome: Controller ID (0x%x)", GetControllerID());
-			_log.Debug(DEBUG_HARDWARE, "evohome: Controller ID (0x%x)", GetControllerID());
+			Log(true, LOG_STATUS, "evohome: Controller ID (0x%x)", GetControllerID());
 		}
 		else
 		{
 			if (m_UControllerID)  // Check whether controller ID has been entered on hardware settings page
 			{
 				SetControllerID(m_UControllerID);
-				// Log(true, LOG_STATUS, "evohome: Controller ID specified (0x%x)", m_UControllerID); 
-				_log.Debug(DEBUG_HARDWARE, "evohome: Controller ID specified (0x%x)", m_UControllerID);
+				Log(true, LOG_STATUS, "evohome: Controller ID specified (0x%x)", m_UControllerID);
 			}
 			else
 				SetControllerID(0xFFFFFF);  // Dummy value to allow detection of multiple controllers
@@ -166,8 +164,7 @@ bool CEvohomeRadio::StartHardware()
 		if (m_UControllerID)
 		{
 			SetControllerID(m_UControllerID);
-			//Log(true, LOG_STATUS, "evohome: Controller ID specified (0x%x)", m_UControllerID);
-			_log.Debug(DEBUG_HARDWARE, "evohome: Controller ID specified (0x%x)", m_UControllerID);
+			Log(true, LOG_STATUS, "evohome: Controller ID specified (0x%x)", m_UControllerID);
 		}
 		else
 			SetControllerID(0xFFFFFF);  // Dummy valueto allow detection of multiple controllers
@@ -178,8 +175,7 @@ bool CEvohomeRadio::StartHardware()
 	m_RelayCheck.clear();
 	for (int i = 0; i < static_cast<int>(result.size()); i++)
 	{
-		// Log(true, LOG_STATUS, "evohome: Relay: devno=%d demmand=%d", atoi(result[i][0].c_str()), atoi(result[i][4].c_str()));
-		_log.Debug(DEBUG_HARDWARE, "evohome: Relay: devno=%d demmand=%d", atoi(result[i][0].c_str()), atoi(result[i][4].c_str()));
+		Log(true, LOG_STATUS, "evohome: Relay: devno=%d demmand=%d", atoi(result[i][0].c_str()), atoi(result[i][4].c_str()));
 		m_RelayCheck.insert(tmap_relay_check_pair(static_cast<uint8_t>(atoi(result[i][0].c_str())), _tRelayCheck(boost::get_system_time() - boost::posix_time::minutes(19), static_cast<uint8_t>(atoi(result[i][4].c_str()))))); //allow 1 minute for startup before trying to restore demand
 	}
 
@@ -428,8 +424,7 @@ void CEvohomeRadio::CheckRelayHeatDemand()
 	{
 		if ((boost::get_system_time() - it.second.m_stLastCheck) > boost::posix_time::seconds(1202)) //avg seems around 1202-1203 but not clear how reference point derived
 		{
-			// Log(true, LOG_STATUS, "evohome: Relay: Refreshing heat demand devno=%d demand=%d", it.first, it.second.m_nDemand);
-			_log.Debug(DEBUG_HARDWARE, "evohome: Relay: Refreshing heat demand devno=%d demand=%d", it.first, it.second.m_nDemand);
+			Log(true, LOG_STATUS, "evohome: Relay: Refreshing heat demand devno=%d demand=%d", it.first, it.second.m_nDemand);
 			UpdateRelayHeatDemand(it.first, it.second.m_nDemand);
 		}
 	}
@@ -438,8 +433,7 @@ void CEvohomeRadio::CheckRelayHeatDemand()
 
 void CEvohomeRadio::SendRelayKeepAlive()
 {
-	// Log(true, LOG_STATUS, "evohome: Relay: Sending keep alive");
-	_log.Debug(DEBUG_HARDWARE, "evohome: Relay: Sending keep alive");
+	Log(true, LOG_STATUS, "evohome: Relay: Sending keep alive");
 	AddSendQueue(CEvohomeMsg(CEvohomeMsg::pktinf, 0, GetGatewayID(), cmdActuatorCheck).Add((uint8_t)0xFC).Add((uint8_t)0xC8));
 }
 
@@ -508,8 +502,7 @@ void CEvohomeRadio::SendZoneSensor()
 				StringSplit(result[0][0], ";", strarray);
 				if (!strarray.empty())
 					dbTemp = atof(strarray[0].c_str());
-				// Log(true, LOG_STATUS, "evohome: Send Temp Zone msg Zone: %d DeviceID: 0x%x Name:%s Temp:%f ", i, ID, SensorName.c_str(), dbTemp);
-				_log.Debug(DEBUG_HARDWARE, "evohome: Send Temp Zone msg Zone: %d DeviceID: 0x%x Name:%s Temp:%f ", i, ID, SensorName.c_str(), dbTemp);
+				Log(true, LOG_STATUS, "evohome: Send Temp Zone msg Zone: %d DeviceID: 0x%x Name:%s Temp:%f ", i, ID, SensorName.c_str(), dbTemp);
 				AddSendQueue(CEvohomeMsg(CEvohomeMsg::pktinf, 0, ID, cmdZoneTemp).Add((uint8_t)0).Add(static_cast<int16_t>(dbTemp*100.0)));
 				// Update the dummy Temp Zone device with the new temperature
 				_tEVOHOME2 tsen;
@@ -689,8 +682,7 @@ void CEvohomeRadio::ProcessMsg(const char * rawmsg)
 						else if (MultiControllerID[i] == 0)
 						{
 							MultiControllerID[i] = msg.GetID(n);
-							// _log.Log(LOG_STATUS, "evohome: controller detected, ID:0x%x", MultiControllerID[i]);
-							_log.Debug(DEBUG_HARDWARE, "evohome: controller detected, ID:0x%x", MultiControllerID[i]);
+							_log.Log(LOG_STATUS, "evohome: controller detected, ID:0x%x", MultiControllerID[i]);
 							break;
 						}
 
@@ -731,8 +723,7 @@ bool CEvohomeRadio::DecodePayload(CEvohomeMsg &msg)
 bool CEvohomeRadio::DumpMessage(CEvohomeMsg &msg)
 {
 	char tag[] = "DUMP_MSG";
-	// Log(true, LOG_STATUS, "evohome: %s: CMD=%04x Len=%d", tag, msg.command, msg.payloadsize);
-	_log.Debug(DEBUG_HARDWARE, "evohome: %s: CMD=%04x Len=%d", tag, msg.command, msg.payloadsize);
+	Log(true, LOG_STATUS, "evohome: %s: CMD=%04x Len=%d", tag, msg.command, msg.payloadsize);
 	std::string strpayload, strascii;
 	char szTmp[1024];
 	for (int i = 0; i < msg.payloadsize; i++)
@@ -742,8 +733,7 @@ bool CEvohomeRadio::DumpMessage(CEvohomeMsg &msg)
 		sprintf(szTmp, "%c", msg.payload[i]);
 		strascii += szTmp;
 	}
-	// Log(true, LOG_STATUS, "evohome: %s: payload=%s (ASCII)=%s", tag, strpayload.c_str(), strascii.c_str());
-	_log.Debug(DEBUG_HARDWARE, "evohome: %s: payload=%s (ASCII)=%s", tag, strpayload.c_str(), strascii.c_str());
+	Log(true, LOG_STATUS, "evohome: %s: payload=%s (ASCII)=%s", tag, strpayload.c_str(), strascii.c_str());
 	return true;
 }
 
@@ -838,8 +828,7 @@ bool CEvohomeRadio::DecodeSetpoint(CEvohomeMsg &msg)//0x2309
 		return true;
 
 	if (msg.payloadsize == 1) {
-		// Log(true, LOG_STATUS, "evohome: %s: Request for zone %d", tag, msg.payload[0]);
-		_log.Debug(DEBUG_HARDWARE, "evohome: %s: Request for zone %d", tag, msg.payload[0]);
+		Log(true, LOG_STATUS, "evohome: %s: Request for zone %d", tag, msg.payload[0]);
 		return true;
 	}
 	if (msg.payloadsize % 3 != 0) {
@@ -860,13 +849,11 @@ bool CEvohomeRadio::DecodeSetpoint(CEvohomeMsg &msg)//0x2309
 		tsen.temperature = msg.payload[i + 1] << 8 | msg.payload[i + 2];
 		if (tsen.temperature == 0x7FFF)
 		{
-			// Log(true, LOG_STATUS, "evohome: %s: Warning setpoint not set for zone %d", tag, msg.payload[0]);
-			_log.Debug(DEBUG_HARDWARE, "evohome: %s: Warning setpoint not set for zone %d", tag, msg.payload[0]);
+			Log(true, LOG_STATUS, "evohome: %s: Warning setpoint not set for zone %d", tag, msg.payload[0]);
 			continue;
 		}
 		SetMaxZoneCount(tsen.zone);//this should increase on startup as we poll all zones so we don't respond to changes here
-		// Log(true, LOG_STATUS, "evohome: %s: Setting: %d: %d", tag, tsen.zone, tsen.temperature);
-		_log.Debug(DEBUG_HARDWARE, "evohome: %s: Setting: %d: %d", tag, tsen.zone, tsen.temperature);
+		Log(true, LOG_STATUS, "evohome: %s: Setting: %d: %d", tag, tsen.zone, tsen.temperature);
 		//It appears that the controller transmits the current setpoint for all zones periodically this is presumably so
 		//the zone controller can update to any changes as required
 		//The zone controllers also individually transmit their own setpoint as it is currently set
@@ -880,8 +867,7 @@ bool CEvohomeRadio::DecodeSetpoint(CEvohomeMsg &msg)//0x2309
 			char zstrname[40];
 			sprintf(zstrname, "Zone %d", tsen.zone);
 			tsen.zone += 12; //zone number offset by 12
-			// Log(true, LOG_STATUS, "evohome: %s: Setting: %d (0x%x): %d", tag, tsen.zone, msg.GetID(0), tsen.temperature);
-			_log.Debug(DEBUG_HARDWARE, "evohome: %s: Setting: %d (0x%x): %d", tag, tsen.zone, msg.GetID(0), tsen.temperature);
+			Log(true, LOG_STATUS, "evohome: %s: Setting: %d (0x%x): %d", tag, tsen.zone, msg.GetID(0), tsen.temperature);
 			sDecodeRXMessage(this, (const unsigned char *)&tsen, zstrname, -1);
 		}
 	}
@@ -897,8 +883,7 @@ bool CEvohomeRadio::DecodeSetpointOverride(CEvohomeMsg &msg)//0x2349
 		return true;
 
 	if (msg.payloadsize == 1) {
-		// Log(true, LOG_STATUS, "evohome: %s: Request for zone %d", tag, msg.payload[0]);
-		_log.Debug(DEBUG_HARDWARE, "evohome: %s: Request for zone %d", tag, msg.payload[0]);
+		Log(true, LOG_STATUS, "evohome: %s: Request for zone %d", tag, msg.payload[0]);
 		return true;
 	}
 	//reply is 7 bytes or 13 bytes with a date?
@@ -1699,8 +1684,8 @@ void CEvohomeRadio::Idle_Work()
 					}
 					else if (MultiControllerCount == 1) // If only 1 controller detected then proceed, otherwise continue searching for controller
 					{
-						//Log(true, LOG_STATUS, "evohome serial: Multi-controller check passed. Controller ID: 0x%x", MultiControllerID[0]);
-						_log.Debug(DEBUG_HARDWARE, "evohome serial: Multi-controller check passed. Controller ID: 0x%x", MultiControllerID[0]);
+						Log(true, LOG_STATUS, "evohome serial: Multi-controller check passed. Controller ID: 0x%x", MultiControllerID[0]);
+						SetControllerID(MultiControllerID[0]);
 						startup = false;
 					}
 					RequestCurrentState(); //and also get startup info as this should only happen during initial setup
