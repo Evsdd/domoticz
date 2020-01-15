@@ -3,13 +3,11 @@ local Adapters = require('Adapters')
 local TimedCommand = require('TimedCommand')
 local TIMED_OPTIONS = require('TimedCommandOptions')
 
-
 local function Device(domoticz, data, dummyLogger)
 
 	local self = {}
 	local state
 	local adapterManager = Adapters(dummyLogger)
-
 
 	function self.update(nValue, sValue, protected)
 		local params = {
@@ -28,7 +26,7 @@ local function Device(domoticz, data, dummyLogger)
 
 	self['name'] = data.name
 	self['id'] = data.id -- actually, this is the idx
-	self['idx'] = data.id -- for completeness
+	self['idx'] = self.id -- for completeness
 	self['_data'] = data
 	self['baseType'] = data.baseType
 

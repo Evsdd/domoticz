@@ -78,6 +78,7 @@ private:
 	bool DecodeSysInfo(CEvohomeMsg &msg);
 	bool DecodeZoneName(CEvohomeMsg &msg);
 	bool DecodeHeatDemand(CEvohomeMsg &msg);
+	bool DecodeOpenThermBridge(CEvohomeMsg &msg);
 	bool DecodeZoneInfo(CEvohomeMsg &msg);
 	bool DecodeBinding(CEvohomeMsg &msg);
 	bool DecodeActuatorState(CEvohomeMsg &msg);
@@ -103,7 +104,6 @@ protected:
 	std::shared_ptr<std::thread> m_thread;
 	int m_retrycntr;
 	int m_nBufPtr;
-	bool m_bDoRestart;
 
 	unsigned int MultiControllerID[5];
 	bool AllSensors;

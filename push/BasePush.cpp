@@ -69,8 +69,8 @@ const char *RFX_Type_SubType_Values(const unsigned char dType, const unsigned ch
 		{ pTypeRAIN, sTypeRAIN6, "Rain rate,Total rain" },
 		{ pTypeRAIN, sTypeRAIN7, "Rain rate,Total rain" },
 		{ pTypeRAIN, sTypeRAIN8, "Rain rate,Total rain" },
-		{ pTypeRAIN, sTypeRAIN9, "Rain rate,Total rain" },
 		{ pTypeRAIN, sTypeRAINWU, "Rain rate,Total rain" },
+		{ pTypeRAIN, sTypeRAINByRate, "Rain rate,Total rain" },
 
 		{ pTypeWIND, sTypeWIND1, "Direction,Direction string,Speed,Gust,Temperature,Chill" },
 		{ pTypeWIND, sTypeWIND2, "Direction,Direction string,Speed,Gust,Temperature,Chill" },
@@ -79,7 +79,6 @@ const char *RFX_Type_SubType_Values(const unsigned char dType, const unsigned ch
 		{ pTypeWIND, sTypeWIND5, "Direction,Direction string,Speed,Gust,Temperature,Chill" },
 		{ pTypeWIND, sTypeWIND6, "Direction,Direction string,Speed,Gust,Temperature,Chill" },
 		{ pTypeWIND, sTypeWIND7, "Direction,Direction string,Speed,Gust,Temperature,Chill" },
-		{ pTypeWIND, sTypeWIND8, "Direction,Direction string,Speed,Gust,Temperature,Chill" },
 		{ pTypeWIND, sTypeWINDNoTemp, "Direction,Direction string,Speed,Gust,Chill" },
 		{ pTypeWIND, sTypeWINDNoTempNoChill, "Direction,Direction string,Speed,Gust" },
 
@@ -165,6 +164,7 @@ const char *RFX_Type_SubType_Values(const unsigned char dType, const unsigned ch
 		{ pTypeSecurity1, sTypePowercodeAux, "Status" },
 		{ pTypeSecurity1, sTypeMeiantech, "Status" },
 		{ pTypeSecurity1, sTypeSA30, "Status" },
+		{ pTypeSecurity1, sTypeRM174RF, "Status" },
 		{ pTypeSecurity1, sTypeDomoticzSecurity, "Status" },
 
 		{ pTypeSecurity2, sTypeSec2Classic, "Status" },
@@ -250,6 +250,7 @@ const char *RFX_Type_SubType_Values(const unsigned char dType, const unsigned ch
 		{ pTypeGeneral, sTypeTextStatus, "Text" },
 		{ pTypeGeneral, sTypeZWaveThermostatMode, "Thermostat Mode" },
 		{ pTypeGeneral, sTypeZWaveThermostatFanMode, "Thermostat Fan Mode" },
+		{ pTypeGeneral, sTypeZWaveThermostatOperatingState, "Thermostat Operating State" },
 		{ pTypeGeneral, sTypeAlert, "Alert" },
 		{ pTypeGeneral, sTypeSoundLevel, "Sound Level" },
 		{ pTypeGeneral, sTypeUV, "UV,Temperature" },
@@ -267,8 +268,9 @@ const char *RFX_Type_SubType_Values(const unsigned char dType, const unsigned ch
 		{ pTypeChime, sTypeByronSX, "Status" },
 		{ pTypeChime, sTypeByronMP001, "Status" },
 		{ pTypeChime, sTypeSelectPlus, "Status" },
-		{ pTypeChime, sTypeSelectPlus3, "Status" },
+		{ pTypeChime, sTypeByronBY, "Status" },
 		{ pTypeChime, sTypeEnvivo, "Status" },
+		{ pTypeChime, sTypeAlfawise, "Status" },
 
 		{ pTypeTEMP_RAIN, sTypeTR1, "Temperature,Total rain" },
 

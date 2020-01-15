@@ -28,22 +28,19 @@ local function EventHelpers(domoticz, mainMethod)
 	local webRoot = globalvariables['domoticz_webroot']
 	local _url = 'http://127.0.0.1:' .. (tostring(globalvariables['domoticz_listening_port']) or "8080")
 
-
-	local settings =
-	{
-		['Log level']           = tonumber(globalvariables['dzVents_log_level']) or  1,
-		['Domoticz url']        = _url,
-		url                     = url,
-		webRoot                 = tostring(webRoot),
-		serverPort              = globalvariables['domoticz_listening_port'] or '8080',
-		dzVentsVersion          = globalvariables.dzVents_version,
-		domoticzVersion         = globalvariables.domoticz_version,
-		location                =
-									{
-										name        = utils.urlDecode(globalvariables['domoticz_title'] or "Domoticz"),
-										latitude    = globalvariables.latitude or 0,
-										longitude   = globalvariables.longitude or 0,
-									},
+	local settings = {
+		['Log level'] = tonumber(globalvariables['dzVents_log_level']) or 1,
+		['Domoticz url'] = _url,
+		url = url,
+		webRoot = tostring(webRoot),
+		serverPort = globalvariables['domoticz_listening_port'] or '8080',
+		dzVentsVersion = globalvariables.dzVents_version,
+		domoticzVersion = globalvariables.domoticz_version,
+		location = {
+			name = utils.urlDecode(globalvariables['domoticz_title'] or "Domoticz"),
+			latitude = globalvariables.latitude or 0,
+			longitude = globalvariables.longitude or 0,
+		}
 	}
 
 	if (webRoot ~= '' and webRoot ~= nil) then
@@ -79,6 +76,9 @@ local function EventHelpers(domoticz, mainMethod)
 		if (storageDef ~= nil) then
 			-- load the datafile for this module
 			ok, fileStorage = pcall(require, module)
+			if type(fileStorage) == boolean then
+				utils.log('Problem with module: ' .. module, utils.LOG_ERROR)
+			end
 			package.loaded[module] = nil -- no caching
 			if (ok) then
 				-- only transfer data as defined in storageDef
@@ -225,7 +225,6 @@ local function EventHelpers(domoticz, mainMethod)
 			-- ==================
 			local ok, res, info
 
-
 			if (device ~= nil) then
 				info = getEventInfo(eventHandler, self.domoticz.EVENT_TYPE_DEVICE)
 				ok, res = pcall(eventHandler['execute'], self.domoticz, device, info)
@@ -280,7 +279,7 @@ local function EventHelpers(domoticz, mainMethod)
 
 				return res
 			else
-				utils.log('An error occured when calling event handler ' .. eventHandler.name, utils.LOG_ERROR)
+				utils.log('An error occurred when calling event handler ' .. eventHandler.name, utils.LOG_ERROR)
 				utils.log(res, utils.LOG_ERROR) -- error info
 			end
 		else
@@ -379,6 +378,7 @@ local function EventHelpers(domoticz, mainMethod)
 				moduleLabel = eventHandler.name .. ''
 			end
 
+			_G.moduleLabel = eventHandler.name
 			if (device) then
 				moduleLabelInfo = ' Device: "' .. device.name .. ' (' .. device.hardwareName .. ')", Index: ' .. tostring(device.id)
 			elseif (variable) then
@@ -392,10 +392,19 @@ local function EventHelpers(domoticz, mainMethod)
 			end
 
 			triggerInfo = eventHandler.trigger and ', trigger: ' .. eventHandler.trigger or ''
-
-			utils.log('------ Start ' ..  scriptType ..  moduleLabel ..':' .. moduleLabelInfo .. triggerInfo, utils.LOG_MODULE_EXEC_INFO)
+			local clockTimeStampAtStart = os.clock()
+			local timeStampAtStart = os.time()
+			utils.log('------ Start ' .. scriptType .. moduleLabel ..':' .. moduleLabelInfo .. triggerInfo, utils.LOG_MODULE_EXEC_INFO)
 			self.callEventHandler(eventHandler, device, variable, security, scenegroup, httpResponse)
-			utils.log('------ Finished ' .. moduleLabel, utils.LOG_MODULE_EXEC_INFO)
+			local clockTimeSpend = os.clock() - clockTimeStampAtStart
+			local realTimeSpend = os.time() - timeStampAtStart
+			if realTimeSpend > 9 or clockTimeSpend > 7 then
+				utils.log('------ Finished ' .. moduleLabel .. ' after >' .. realTimeSpend .. ' seconds. (using '.. tostring(clockTimeSpend):sub(1,5) .. ' seconds CPU time !)' , utils.LOG_ERROR)
+			elseif realTimeSpend > 6 or clockTimeSpend > 5 then
+				utils.log('------ Finished ' .. moduleLabel .. ' after >' .. realTimeSpend .. ' seconds. (using '.. tostring(clockTimeSpend):sub(1,5) .. ' seconds CPU time !)' , utils.LOG_FORCE)
+			else
+				utils.log('------ Finished ' .. moduleLabel , utils.LOG_MODULE_EXEC_INFO)
+			end
 
 			restoreLogging()
 		end
@@ -583,7 +592,7 @@ local function EventHelpers(domoticz, mainMethod)
 		local modules = {}
 
 		if not self.scripts then
-		   self.scripts, self.errModules = loadEventScripts()
+			self.scripts, self.errModules = loadEventScripts()
 		end
 
 		if (mode == nil) then mode = 'device' end
@@ -713,7 +722,6 @@ local function EventHelpers(domoticz, mainMethod)
 		local printed = false
 		local level = utils.LOG_DEBUG
 
-
 		if (fromIndex == nil) then
 			fromIndex = 1
 		end
@@ -773,13 +781,16 @@ local function EventHelpers(domoticz, mainMethod)
 		-- id is done later
 
 		for scriptTrigger, scripts in pairs(allEventScripts) do
-			if (string.find(scriptTrigger, '*')) then -- a wild-card was use
-				-- turn it into a valid regexp
-				scriptTrigger = '^' .. string.gsub(scriptTrigger, "*", ".*") .. '$'
 
-				if (string.match(target, scriptTrigger)) then
-					-- there is trigger for this target
+			if (string.find(scriptTrigger, '*')) then -- a wild-card was used
+				scriptTrigger = ('^' .. scriptTrigger:gsub("[%^$]","."):gsub("*", ".*") .. '$')
 
+				local function sMatch(text, match) -- specialized sanitized match function to allow combination of Lua magic chars in wildcards
+					local sanitizedMatch = match:gsub("([%%%(%)%[%]%+%-%?])", "%%%1") -- escaping all 'magic' chars except *, ., ^ and $
+					return text:match(sanitizedMatch)
+				end
+
+				if sMatch(target, scriptTrigger) then
 					if modules == nil then modules = {} end
 
 					for i, mod in pairs(scripts) do
@@ -965,7 +976,7 @@ local function EventHelpers(domoticz, mainMethod)
 				local scriptsToExecute = self.findScriptForTarget(callback, httpResponseScripts)
 
 				if (scriptsToExecute ~= nil) then
-					utils.log('Handling httpResponse-events for: "' .. callback, utils.LOG_INFO)
+					utils.log('Handling httpResponse-events for: "' .. callback .. '"', utils.LOG_INFO)
 					self.handleEvents(scriptsToExecute, nil, nil, nil, nil, response)
 					self.dumpCommandArray(self.domoticz.commandArray, caSize + 1)
 				end

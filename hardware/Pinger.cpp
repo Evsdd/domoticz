@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Pinger.h"
 #include "../main/Helper.h"
+#include "../main/HTMLSanitizer.h"
 #include "../main/Logger.h"
 #include "../main/SQLHelper.h"
 #include "../main/RFXtrx.h"
@@ -17,6 +18,12 @@
 #include "pinger/ipv4_header.h"
 
 #include <iostream>
+
+#if BOOST_VERSION >= 107000
+#define GET_IO_SERVICE(s) ((boost::asio::io_context&)(s).get_executor().context())
+#else
+#define GET_IO_SERVICE(s) ((s).get_io_service())
+#endif
 
 class pinger
 	: private domoticz::noncopyable
@@ -76,7 +83,7 @@ private:
 				num_tries_++;
 				if (num_tries_ > 4)
 				{
-					resolver_.get_io_service().stop();
+					GET_IO_SERVICE(resolver_).stop();
 				}
 				else
 				{
@@ -118,7 +125,7 @@ private:
 			if (num_replies_++ == 0)
 				timer_.cancel();
 			m_PingState = true;
-			resolver_.get_io_service().stop();
+			GET_IO_SERVICE(resolver_).stop();
 		}
 		else
 		{
@@ -517,8 +524,8 @@ namespace http {
 			}
 
 			std::string hwid = request::findValue(&req, "idx");
-			std::string name = request::findValue(&req, "name");
-			std::string ip = request::findValue(&req, "ip");
+			std::string name = HTMLSanitizer::Sanitize(request::findValue(&req, "name"));
+			std::string ip = HTMLSanitizer::Sanitize(request::findValue(&req, "ip"));
 			int Timeout = atoi(request::findValue(&req, "timeout").c_str());
 			if (
 				(hwid == "") ||
@@ -550,8 +557,8 @@ namespace http {
 
 			std::string hwid = request::findValue(&req, "idx");
 			std::string nodeid = request::findValue(&req, "nodeid");
-			std::string name = request::findValue(&req, "name");
-			std::string ip = request::findValue(&req, "ip");
+			std::string name = HTMLSanitizer::Sanitize(request::findValue(&req, "name"));
+			std::string ip = HTMLSanitizer::Sanitize(request::findValue(&req, "ip"));
 			int Timeout = atoi(request::findValue(&req, "timeout").c_str());
 			if (
 				(hwid == "") ||
