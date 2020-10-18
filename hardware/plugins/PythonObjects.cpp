@@ -5,14 +5,15 @@
 //
 #ifdef ENABLE_PYTHON
 
-#include "../main/Logger.h"
-#include "../main/SQLHelper.h"
-#include "../hardware/hardwaretypes.h"
-#include "../main/localtime_r.h"
-#include "../main/mainstructs.h"
-#include "../main/mainworker.h"
-#include "../main/EventSystem.h"
-#include "../notifications/NotificationHelper.h"
+#include "../../main/Logger.h"
+#include "../../main/SQLHelper.h"
+#include "../../hardware/hardwaretypes.h"
+#include "../../main/localtime_r.h"
+#include "../../main/mainstructs.h"
+#include "../../main/mainworker.h"
+#include "../../main/EventSystem.h"
+#include "../../notifications/NotificationHelper.h"
+#include "Plugins.h"
 #include "PythonObjects.h"
 #include "PluginMessages.h"
 #include "PluginProtocols.h"
@@ -23,11 +24,6 @@ namespace Plugins {
 
 	extern struct PyModuleDef DomoticzModuleDef;
 	extern void LogPythonException(CPlugin* pPlugin, const std::string &sHandler);
-
-	struct module_state {
-		CPlugin*	pPlugin;
-		PyObject*	error;
-	};
 
 	void CImage_dealloc(CImage* self)
 	{
@@ -828,6 +824,8 @@ namespace Plugins {
 	{
 		if (self->pPlugin)
 		{
+			self->pPlugin->SetHeartbeatReceived();
+
 			int			nValue = self->nValue;
 			char*		sValue = NULL;
 			int			iSignalLevel = self->SignalLevel;
@@ -1007,7 +1005,7 @@ namespace Plugins {
 				m_notifications.CheckAndHandleNotification(DevRowIdx, self->HwdID, sDeviceID, sName, self->Unit, iType, iSubType, nValue, sValue);
 
 				// Trigger any associated scene / groups
-				m_mainworker.CheckSceneCode(DevRowIdx, (const unsigned char)self->Type, (const unsigned char)self->SubType, nValue, sValue);
+				m_mainworker.CheckSceneCode(DevRowIdx, (const unsigned char)self->Type, (const unsigned char)self->SubType, nValue, sValue, "Python");
 			}
 
 			CDevice_refresh(self);
@@ -1070,6 +1068,7 @@ namespace Plugins {
 	{
 		if ((self->pPlugin) && (self->HwdID != -1) && (self->Unit != -1))
 		{
+			self->pPlugin->SetHeartbeatReceived();
 			std::string sID = std::to_string(self->ID);
 			m_sql.safe_query("UPDATE DeviceStatus SET LastUpdate='%s' WHERE (ID == %s )", TimeToString(NULL, TF_DateTime).c_str(), sID.c_str());
 		}

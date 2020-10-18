@@ -200,6 +200,7 @@ private:
 	void Cmd_UpdateApplication(WebEmSession& session, const request& req, Json::Value& root);
 	void Cmd_GetCosts(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_CheckForUpdate(WebEmSession & session, const request& req, Json::Value &root);
+	void Cmd_CustomEvent(WebEmSession& session, const request& req, Json::Value& root);
 	void Cmd_DownloadUpdate(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_DownloadReady(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_DeleteDatePoint(WebEmSession & session, const request& req, Json::Value &root);
@@ -338,8 +339,10 @@ private:
 	void Cmd_ZWaveDeleteNode(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ZWaveInclude(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ZWaveExclude(WebEmSession & session, const request& req, Json::Value &root);
+	void Cmd_ZWaveIsNodeReplaced(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ZWaveIsNodeIncluded(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ZWaveIsNodeExcluded(WebEmSession & session, const request& req, Json::Value &root);
+	void Cmd_ZWaveIsHasNodeFailedDone(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ZWaveSoftReset(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ZWaveHardReset(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ZWaveNetworkHeal(WebEmSession & session, const request& req, Json::Value &root);
@@ -351,6 +354,8 @@ private:
 	void Cmd_ZWaveCancel(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ApplyZWaveNodeConfig(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ZWaveStateCheck(WebEmSession & session, const request& req, Json::Value &root);
+	void Cmd_ZWaveHasNodeFailed(WebEmSession& session, const request& req, Json::Value& root);
+	void Cmd_ZWaveReplaceFailedNode(WebEmSession& session, const request& req, Json::Value& root);
 	void Cmd_ZWaveRequestNodeConfig(WebEmSession& session, const request& req, Json::Value& root);
 	void Cmd_ZWaveRequestNodeInfo(WebEmSession& session, const request& req, Json::Value& root);
 	void Cmd_ZWaveReceiveConfigurationFromOtherController(WebEmSession & session, const request& req, Json::Value &root);
@@ -365,11 +370,9 @@ private:
 	void ZWaveCPNodeSetButton(WebEmSession & session, const request& req, reply & rep);
 	void ZWaveCPAdminCommand(WebEmSession & session, const request& req, reply & rep);
 	void ZWaveCPNodeChange(WebEmSession & session, const request& req, reply & rep);
-	void ZWaveCPSaveConfig(WebEmSession & session, const request& req, reply & rep);
 	void ZWaveCPGetTopo(WebEmSession & session, const request& req, reply & rep);
 	void ZWaveCPGetStats(WebEmSession & session, const request& req, reply & rep);
 	void ZWaveCPSetGroup(WebEmSession & session, const request& req, reply & rep);
-	void ZWaveCPSceneCommand(WebEmSession & session, const request& req, reply & rep);
 	void Cmd_ZWaveSetUserCodeEnrollmentMode(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ZWaveGetNodeUserCodes(WebEmSession & session, const request& req, Json::Value &root);
 	void Cmd_ZWaveRemoveUserCode(WebEmSession & session, const request& req, Json::Value &root);

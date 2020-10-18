@@ -326,12 +326,13 @@ void CDomoticzHardwareBase::SendSetPointSensor(const uint8_t NodeID, const uint8
 }
 
 
-void CDomoticzHardwareBase::SendDistanceSensor(const int NodeID, const int ChildID, const int BatteryLevel, const float distance, const std::string& defaultname)
+void CDomoticzHardwareBase::SendDistanceSensor(const int NodeID, const int ChildID, const int BatteryLevel, const float distance, const std::string& defaultname, const int RssiLevel /* =12 */)
 {
 	_tGeneralDevice gdevice;
 	gdevice.subtype = sTypeDistance;
 	gdevice.intval1 = (NodeID << 8) | ChildID;
 	gdevice.floatval1 = distance;
+	gdevice.rssi = RssiLevel;
 	sDecodeRXMessage(this, (const unsigned char*)& gdevice, defaultname.c_str(), BatteryLevel);
 }
 
@@ -505,7 +506,7 @@ bool CDomoticzHardwareBase::GetWindSensorValue(const int NodeID, int& WindDir, f
 	return bExists;
 }
 
-void CDomoticzHardwareBase::SendWattMeter(const uint8_t NodeID, const uint8_t ChildID, const int BatteryLevel, const float musage, const std::string& defaultname)
+void CDomoticzHardwareBase::SendWattMeter(const uint8_t NodeID, const uint8_t ChildID, const int BatteryLevel, const float musage, const std::string& defaultname, const int RssiLevel /* =12 */)
 {
 	_tUsageMeter umeter;
 	umeter.id1 = 0;
@@ -513,24 +514,26 @@ void CDomoticzHardwareBase::SendWattMeter(const uint8_t NodeID, const uint8_t Ch
 	umeter.id3 = 0;
 	umeter.id4 = NodeID;
 	umeter.dunit = ChildID;
+	umeter.rssi = RssiLevel;
 	umeter.fusage = musage;
 	sDecodeRXMessage(this, (const unsigned char*)& umeter, defaultname.c_str(), BatteryLevel);
 }
 
 //Obsolete, we should not call this anymore
 //when all calls are removed, we should delete this function
-void CDomoticzHardwareBase::SendKwhMeterOldWay(const int NodeID, const int ChildID, const int BatteryLevel, const double musage, const double mtotal, const std::string& defaultname)
+void CDomoticzHardwareBase::SendKwhMeterOldWay(const int NodeID, const int ChildID, const int BatteryLevel, const double musage, const double mtotal, const std::string& defaultname, const int RssiLevel /* =12 */)
 {
 	SendKwhMeter(NodeID, ChildID, BatteryLevel, musage * 1000, mtotal, defaultname);
 }
 
-void CDomoticzHardwareBase::SendKwhMeter(const int NodeID, const int ChildID, const int BatteryLevel, const double musage, const double mtotal, const std::string& defaultname)
+void CDomoticzHardwareBase::SendKwhMeter(const int NodeID, const int ChildID, const int BatteryLevel, const double musage, const double mtotal, const std::string& defaultname, const int RssiLevel /* =12 */)
 {
 	_tGeneralDevice gdevice;
 	gdevice.subtype = sTypeKwh;
 	gdevice.intval1 = (NodeID << 8) | ChildID;
 	gdevice.floatval1 = (float)musage;
 	gdevice.floatval2 = (float)(mtotal * 1000.0);
+	gdevice.rssi = RssiLevel;
 	sDecodeRXMessage(this, (const unsigned char*)& gdevice, defaultname.c_str(), BatteryLevel);
 }
 
@@ -824,12 +827,14 @@ void CDomoticzHardwareBase::SendVisibilitySensor(const int NodeID, const int Chi
 	sDecodeRXMessage(this, (const unsigned char*)& gDevice, defaultname.c_str(), BatteryLevel);
 }
 
-void CDomoticzHardwareBase::SendCustomSensor(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const float CustomValue, const std::string& defaultname, const std::string& defaultLabel)
+void CDomoticzHardwareBase::SendCustomSensor(const int NodeID, const uint8_t ChildID, const int BatteryLevel, const float CustomValue, const std::string& defaultname, const std::string& defaultLabel, const int RssiLevel /* =12 */)
 {
 
 	_tGeneralDevice gDevice;
 	gDevice.subtype = sTypeCustom;
 	gDevice.id = ChildID;
+	gDevice.battery_level = BatteryLevel;
+	gDevice.rssi = RssiLevel;
 	gDevice.intval1 = (NodeID << 8) | ChildID;
 	gDevice.floatval1 = CustomValue;
 
@@ -967,13 +972,14 @@ void CDomoticzHardwareBase::SendGeneralSwitch(const int NodeID, const int ChildI
 	sDecodeRXMessage(this, (const unsigned char*)& gSwitch, defaultname.c_str(), BatteryLevel);
 }
 
-void CDomoticzHardwareBase::SendMoistureSensor(const int NodeID, const int BatteryLevel, const int mLevel, const std::string& defaultname)
+void CDomoticzHardwareBase::SendMoistureSensor(const int NodeID, const int BatteryLevel, const int mLevel, const std::string& defaultname, const int RssiLevel /* =12 */)
 {
 	_tGeneralDevice gDevice;
 	gDevice.subtype = sTypeSoilMoisture;
 	gDevice.id = 1;
 	gDevice.intval1 = NodeID;
 	gDevice.intval2 = mLevel;
+	gDevice.rssi = RssiLevel;
 	sDecodeRXMessage(this, (const unsigned char*)& gDevice, defaultname.c_str(), BatteryLevel);
 }
 
@@ -1023,4 +1029,149 @@ void CDomoticzHardwareBase::SendFanSensor(const int Idx, const int BatteryLevel,
 	gDevice.intval1 = Idx;
 	gDevice.intval2 = FanSpeed;
 	sDecodeRXMessage(this, (const unsigned char*)& gDevice, defaultname.c_str(), BatteryLevel);
+}
+
+void CDomoticzHardwareBase::SendSecurity1Sensor(const int NodeID, const int DeviceSubType, const int BatteryLevel, const int Status, const std::string &defaultname, const int RssiLevel /* = 12 */)
+{
+	RBUF m_sec1;
+	memset(&m_sec1, 0, sizeof(RBUF));
+
+	m_sec1.SECURITY1.packetlength = sizeof(m_sec1) -1;
+	m_sec1.SECURITY1.packettype = pTypeSecurity1;
+	m_sec1.SECURITY1.subtype = DeviceSubType;
+	m_sec1.SECURITY1.id1 = (NodeID & 0xFF0000) >> 16;
+	m_sec1.SECURITY1.id2 = (NodeID & 0xFF00) >> 8;
+	m_sec1.SECURITY1.id3 = (NodeID & 0xFF);
+	m_sec1.SECURITY1.status = Status;
+	m_sec1.SECURITY1.rssi = RssiLevel;
+	m_sec1.SECURITY1.battery_level = BatteryLevel;
+
+	sDecodeRXMessage(this, (const unsigned char*)& m_sec1.SECURITY1, defaultname.c_str(), BatteryLevel);
+}
+/**
+ * SendSelectorSwitch
+ * 
+ * Helper function to create/update selector switch, validates sValue exist in the list of actions
+ *  
+ * @param  {int} NodeID               : As normal
+ * @param  {uint8_t} ChildID          : As normal
+ * @param  {int} sValue               : Int with the value of the action to take/show, must be present in LevelActions
+ * @param  {std::string} defaultname  : As normal
+ * @param  {int} customImage          : Int with the number of a custom image to use for the selector
+ * @param  {bool} bDropdown           : boolean: true will show a drop down, false will show a row of buttons
+ * @param  {std::string} LevelNames   : String with the labels to show for Actions, seperated with |. Example: "Off|Label 1|Label 2|Label 3"
+ * @param  {std::string} LevelActions : String with numbers, one for eacht Action, seperated with |.  Example: "00|10,|20|30"  - Off is 00
+ * @param  {bool} bHideOff            : Boolean: true will hide the off level, false will enable it.
+  */
+void CDomoticzHardwareBase::SendSelectorSwitch(const int NodeID, const uint8_t ChildID, const std::string sValue, const std::string& defaultname, const int customImage , const bool bDropdown, const std::string& LevelNames,const std::string& LevelActions, const bool bHideOff )
+{
+ 	if (std::size_t index = LevelActions.find(sValue.c_str()) == std::string::npos)
+	{ 
+	   Log(LOG_ERROR,"Value %s not supported by Selector Switch %s, it needs %s ",sValue.c_str() , defaultname.c_str(), LevelActions.c_str() ); 
+	   return; // did not find sValue in LevelAction string so exit with warning
+	}
+	_tGeneralSwitch xcmd;
+	xcmd.len = sizeof(_tGeneralSwitch) - 1;
+	xcmd.type = pTypeGeneralSwitch;
+	xcmd.subtype = sSwitchTypeSelector;
+	xcmd.id = NodeID;
+	xcmd.unitcode = ChildID; //Do we support multiple copies of the same selector switch ??
+	xcmd.level = std::stoi(sValue);
+
+	_eSwitchType switchtype;
+	switchtype = STYPE_Selector;
+
+	std::vector<std::vector<std::string> > result;
+	result = m_sql.safe_query("SELECT ID, sValue, Options FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%08X') AND (Unit == '%d')", m_HwdID, NodeID, xcmd.unitcode);
+	bool bDoesExists = !result.empty();
+    
+	m_mainworker.PushAndWaitRxMessage(this, (const unsigned char *)&xcmd,  defaultname.c_str(), 255);  // will create the base switch if not exist
+
+	if (!bDoesExists)//Switch is new so  we need to update it with all relevant info
+	{
+		std::stringstream build_str; //building up selector option string
+		build_str << "SelectorStyle:";
+		if (bDropdown)
+			build_str << "1";
+		else
+			build_str << "0";
+		build_str << ";LevelNames:" << LevelNames.c_str() << ";LevelOffHidden:";
+		if (bHideOff)
+			build_str <<  "true";
+		else
+			build_str << "false";
+		build_str << ";LevelActions:" << LevelActions.c_str();
+		std::string options_str = m_sql.FormatDeviceOptions(m_sql.BuildDeviceOptions( build_str.str(), false));
+		m_sql.safe_query("UPDATE DeviceStatus SET Name='%q', sValue=%i, SwitchType=%d, CustomImage=%i,options='%q' WHERE(HardwareID == %d) AND (DeviceID=='%08X') AND (Unit == '%d')", defaultname.c_str(), xcmd.level, (switchtype), customImage, options_str.c_str(), m_HwdID, NodeID, xcmd.unitcode);
+        // The Selector switch has been created
+	}
+	else
+	{ 
+		//Check Level
+		if ( xcmd.level == std::stoi(result[0][1].c_str()))
+			return; // no need to uodate
+		result = m_sql.safe_query("UPDATE DeviceStatus SET sValue=%i WHERE (HardwareID==%d) AND (DeviceID=='%08X')", xcmd.level, m_HwdID, NodeID);
+	}
+}
+                            
+/**
+ * MigrateSelectorSwitch
+ *
+ * Helper function to migrate selector switch,  validates if existing LevelActions match existing in the DB, if not migrate the switch based on bMigrate setting
+ *   
+ * @param  {int} NodeID               : As Usual
+ * @param  {uint8_t} ChildID          : As Usual
+ * @param  {std::string} LevelNames   : Will be updated together with LevelNames
+ * @param  {std::string} LevelActions : Checks if the selector switch in the db is in synch with these value, then trie4s to migrat if BMigrate is true
+ * @param  {bool} bMigrate            : true if  the selector may be upgraded if incorrect, false if you only want an  error if migration is needed
+ * @return {int}                      : 0 No need for migration /not yet exist| 1 Migration completed| -1 Need Migration
+ */
+int CDomoticzHardwareBase::MigrateSelectorSwitch(const int NodeID, const uint8_t ChildID,  const std::string& LevelNames, const std::string& LevelActions, const bool bMigrate )
+{
+	std::string options;
+	std::vector<std::vector<std::string> > result;
+	bool bUpdated = false;
+		
+	result = m_sql.safe_query("SELECT Options FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%08X') AND (Unit == '%d')", m_HwdID, NodeID, ChildID);
+	if (result.empty())
+	    return 0;  // switch doen not exist yet
+	std::map<std::string, std::string> optionsMap;
+	optionsMap = m_sql.BuildDeviceOptions(result[0][0]);
+	int count = optionsMap.size();
+	if (count > 0) 
+	{
+		int i = 0;
+		std::stringstream ssoptions;
+		for (const auto& itt : optionsMap)
+		{
+			std::string optionName = itt.first.c_str();
+			std::string optionValue = itt.second.c_str();
+			if(strcmp(itt.first.c_str(),"LevelActions") == 0)
+			{
+				if(strcmp(itt.second.c_str(), LevelActions.c_str()) !=  0 )
+				{
+					bUpdated = true;  // the list of actions is not what we expected. flag  that Migration is required
+					optionValue = LevelActions.c_str();			
+				}
+			}
+			else if(strcmp(itt.first.c_str(),"LevelNames") == 0)
+			{
+					optionValue = LevelNames.c_str();	
+			}
+			ssoptions << optionName << ":" << optionValue;
+			if (i < count) {
+				ssoptions << ";";
+			}
+			options.assign(ssoptions.str());
+		}
+	}
+    if( bUpdated ) // the options map has been  migrated  do we migratre to warn? 
+	{
+		if(!bMigrate)
+			return -1;  // Signnal  selector switch is not latest version
+		std::string options_str = m_sql.FormatDeviceOptions(m_sql.BuildDeviceOptions( options.c_str(), false));
+		m_sql.safe_query("UPDATE DeviceStatus SET options='%q' WHERE (HardwareID==%d) AND (DeviceID=='%08X')", options_str.c_str(), m_HwdID, NodeID);
+	   return 1; // signal migratreion completed
+	}
+    return 0;	// signal no need for migration
 }

@@ -11,21 +11,17 @@
 
 #define MAX_POLL_INTERVAL 3600*1000
 
-enum _eDaeTcpState
-{
-	RESPOND_RECEIVED = 0,		//0
-	DAE_WIFI16_UPDATE_IO,		//1
-	DAE_WIFI16_ASK_CMD,			//2
-	DAE_READ_COILS_CMD,			//3
-	DAE_WRITE_COIL_CMD,			//4
-};
-
 #define DAE_IO_TYPE_RELAY			2
 
 #define READ_COILS_CMD_LENGTH				11
 #define WRITE_SINGLE_COIL_CMD_LENGTH		12
 
-
+const char *szDenkoviHardwareNamesTCP[3] = {
+		"WiFi 16 Relays-VCP", 
+		"WiFi 16 Relays-TCP Modbus", 
+		"smartDEN IP-16R-MT"
+		};
+		
 CDenkoviTCPDevices::CDenkoviTCPDevices(const int ID, const std::string &IPAddress, const unsigned short usIPPort, const int pollInterval, const int model, const int slaveId) :
 	m_szIPAddress(IPAddress),
 	m_pollInterval(pollInterval)
@@ -35,7 +31,7 @@ CDenkoviTCPDevices::CDenkoviTCPDevices(const int ID, const std::string &IPAddres
 	m_bOutputLog = false;
 	m_iModel = model;
 	m_slaveId = slaveId;
-	m_Cmd = 0;
+	m_Cmd = _eDaeTcpState::RESPOND_RECEIVED;
 	if (m_pollInterval < 500)
 		m_pollInterval = 500;
 	else if (m_pollInterval > MAX_POLL_INTERVAL)
@@ -65,14 +61,7 @@ bool CDenkoviTCPDevices::StartHardware()
 	//Start worker thread
 	m_thread = std::make_shared<std::thread>(&CDenkoviTCPDevices::Do_Work, this);
 	m_bIsStarted = true;
-	switch (m_iModel) {
-	case DDEV_WIFI_16R:
-		_log.Log(LOG_STATUS, "WiFi 16 Relays-VCP: Started");
-		break;
-	case DDEV_WIFI_16R_Modbus:
-		_log.Log(LOG_STATUS, "WiFi 16 Relays-TCP Modbus: Started");
-		break;
-	}
+	Log(LOG_STATUS, "%s: Started.",szDenkoviHardwareNamesTCP[m_iModel]);
 	return (m_thread != NULL);
 }
 
@@ -113,14 +102,14 @@ void CDenkoviTCPDevices::OnData(const unsigned char * pData, size_t length)
 {
 	switch (m_iModel) {
 	case DDEV_WIFI_16R: {
-		if (m_Cmd == DAE_WIFI16_ASK_CMD) {
+		if (m_Cmd == _eDaeTcpState::DAE_WIFI16_ASK_CMD) {
 			uint8_t firstEight, secondEight;
 			if (length == 2) {
 				firstEight = (unsigned char)pData[0];
 				secondEight = (unsigned char)pData[1];
 			}
 			else {
-				_log.Log(LOG_ERROR, "USB 16 Relays-VCP: Response error.");
+				Log(LOG_ERROR, "%s: Response error!",szDenkoviHardwareNamesTCP[m_iModel]);
 				return;
 			}
 			uint8_t z = 0;
@@ -133,20 +122,21 @@ void CDenkoviTCPDevices::OnData(const unsigned char * pData, size_t length)
 		}
 		break;
 	}
+	case DDEV_SmartDEN_IP_16_R_MT_MODBUS:
 	case DDEV_WIFI_16R_Modbus: {
 		m_respBuff.append((const char * )pData, length);
 		m_uiReceivedDataLength += (uint16_t)length;
 
-		if (m_Cmd == DAE_READ_COILS_CMD && m_uiReceivedDataLength >= READ_COILS_CMD_LENGTH) {
+		if (m_Cmd == _eDaeTcpState::DAE_READ_COILS_CMD && m_uiReceivedDataLength >= READ_COILS_CMD_LENGTH) {
 			ConvertResponse(m_respBuff, m_uiReceivedDataLength);
 			m_respBuff.clear();
 			m_uiReceivedDataLength = 0;
 			if (m_pReq.trId[0] != m_pResp.trId[0] || m_pReq.trId[1] != m_pResp.trId[1]) {
-				_log.Log(LOG_ERROR, "WiFi 16 Relays-TCP Modbus: Wrong Transaction ID.");
+				Log(LOG_ERROR, "%s: Wrong Transaction ID!",szDenkoviHardwareNamesTCP[m_iModel]);
 				break;
 			}
 			if (m_pResp.length[0] != 0 || m_pResp.length[1] != 5) {
-				_log.Log(LOG_ERROR, "WiFi 16 Relays-TCP Modbus: Wrong Length of Response.");
+				Log(LOG_ERROR, "%s: Wrong Length of Response!",szDenkoviHardwareNamesTCP[m_iModel]);
 				break;
 			}
 			uint8_t firstEight, secondEight;
@@ -159,16 +149,16 @@ void CDenkoviTCPDevices::OnData(const unsigned char * pData, size_t length)
 				SendSwitch(DAE_IO_TYPE_RELAY, 8 + ii, 255, (((secondEight >> (ii - 1)) & 0x01) != 0) ? true : false, 0, "Relay " + std::to_string(8 + ii));
 			}
 		}
-		else if (m_Cmd == DAE_WRITE_COIL_CMD && m_uiReceivedDataLength >= WRITE_SINGLE_COIL_CMD_LENGTH) {
+		else if (m_Cmd == _eDaeTcpState::DAE_WRITE_COIL_CMD && m_uiReceivedDataLength >= WRITE_SINGLE_COIL_CMD_LENGTH) {
 			ConvertResponse(m_respBuff, m_uiReceivedDataLength);
 			m_respBuff.clear();
 			m_uiReceivedDataLength = 0;
 			if (m_pReq.trId[0] != m_pResp.trId[0] || m_pReq.trId[1] != m_pResp.trId[1]) {
-				_log.Log(LOG_ERROR, "WiFi 16 Relays-TCP Modbus: Wrong Transaction ID.");
+				Log(LOG_ERROR, "%s: Wrong Transaction ID!",szDenkoviHardwareNamesTCP[m_iModel]);
 				break;
 			}
 			if (m_pResp.length[0] != 0 || m_pResp.length[1] != 6) {
-				_log.Log(LOG_ERROR, "WiFi 16 Relays-TCP Modbus: Wrong Data Received.");
+				Log(LOG_ERROR, "%s: Wrong Data Received!",szDenkoviHardwareNamesTCP[m_iModel]);
 				break;
 			}
 		}
@@ -185,25 +175,11 @@ void CDenkoviTCPDevices::OnConnect() {
 }
 
 void CDenkoviTCPDevices::OnDisconnect() {
-	switch (m_iModel) {
-	case DDEV_WIFI_16R:
-		_log.Log(LOG_STATUS, "WiFi 16 Relays-VCP: Disconnected");
-		break;
-	case DDEV_WIFI_16R_Modbus:
-		_log.Log(LOG_STATUS, "WiFi 16 Relays-TCP Modbus: Disconnected");
-		break;
-	}
+	Log(LOG_STATUS, "%s: Disconnected.",szDenkoviHardwareNamesTCP[m_iModel]);	  
 }
 
 void CDenkoviTCPDevices::OnError(const boost::system::error_code& /*error*/) {
-	switch (m_iModel) {
-	case DDEV_WIFI_16R:
-		_log.Log(LOG_STATUS, "WiFi 16 Relays-VCP: Error occured.");
-		break;
-	case DDEV_WIFI_16R_Modbus:
-		_log.Log(LOG_STATUS, "WiFi 16 Relays-TCP Modbus: Error occured.");
-		break;
-	}
+	Log(LOG_ERROR, "%s: Error occured!",szDenkoviHardwareNamesTCP[m_iModel]);	 
 }
 
 bool CDenkoviTCPDevices::StopHardware()
@@ -236,15 +212,7 @@ void CDenkoviTCPDevices::Do_Work()
 		}
 	}
 	terminate();
-
-	switch (m_iModel) {
-	case DDEV_WIFI_16R:
-		_log.Log(LOG_STATUS, "WiFi 16 Relays-VCP: Worker stopped...");
-		break;
-	case DDEV_WIFI_16R_Modbus:
-		_log.Log(LOG_STATUS, "WiFi 16 Relays-TCP Modbus: Worker stopped...");
-		break;
-	}
+	Log(LOG_STATUS, "%s: Stopped.",szDenkoviHardwareNamesTCP[m_iModel]); 
 }
 
 bool CDenkoviTCPDevices::WriteToHardware(const char *pdata, const unsigned char /*length*/)
@@ -265,7 +233,7 @@ bool CDenkoviTCPDevices::WriteToHardware(const char *pdata, const unsigned char 
 		//int ioType = pSen->id;
 		if (ioType != DAE_IO_TYPE_RELAY)
 		{
-			_log.Log(LOG_ERROR, "WiFi 16 Relays-VCP: Not a valid Relay");
+			Log(LOG_ERROR, "%s: Not a valid Relay!",szDenkoviHardwareNamesTCP[m_iModel]);
 			return false;
 		}
 		//int io = pSen->unitcode;//Relay1 to Relay16
@@ -277,16 +245,17 @@ bool CDenkoviTCPDevices::WriteToHardware(const char *pdata, const unsigned char 
 			szCmd << "-//";
 		else
 			szCmd << "+//";
-		m_Cmd = DAE_WIFI16_UPDATE_IO;
+		m_Cmd = _eDaeTcpState::DAE_WIFI16_UPDATE_IO;
 		write(szCmd.str());
 		return true;
 	}
+	case DDEV_SmartDEN_IP_16_R_MT_MODBUS:
 	case DDEV_WIFI_16R_Modbus: {
 		std::stringstream szCmd;
 		//int ioType = pSen->id;
 		if (ioType != DAE_IO_TYPE_RELAY)
 		{
-			_log.Log(LOG_ERROR, "WiFi 16 Relays-TCP Modbus: Not a valid Relay");
+			Log(LOG_ERROR, "%s: Not a valid Relay",szDenkoviHardwareNamesTCP[m_iModel]);
 			return false;
 		}
 		//int io = pSen->unitcode;//Relay1 to Relay16
@@ -311,7 +280,7 @@ bool CDenkoviTCPDevices::WriteToHardware(const char *pdata, const unsigned char 
 		m_pReq.data[1] = 0x00;
 		size_t dataLength = m_pReq.length[1] + 6;
 		CreateRequest(m_reqBuff,dataLength);
-		m_Cmd = DAE_WRITE_COIL_CMD;
+		m_Cmd = _eDaeTcpState::DAE_WRITE_COIL_CMD;
 		write("");
 		write("");
 		write("");
@@ -321,7 +290,7 @@ bool CDenkoviTCPDevices::WriteToHardware(const char *pdata, const unsigned char 
 	}
 	}
 
-	_log.Log(LOG_ERROR, "Denkovi: Unknown Device!");
+	Log(LOG_ERROR, "Unknown Device!");
 	return false;
 }
 
@@ -329,12 +298,13 @@ void CDenkoviTCPDevices::GetMeterDetails()
 {
 	switch (m_iModel) {
 	case DDEV_WIFI_16R: {
-		m_Cmd = DAE_WIFI16_ASK_CMD;
+		m_Cmd = _eDaeTcpState::DAE_WIFI16_ASK_CMD;
 		write("ask//");
 		break;
 	}
+	case DDEV_SmartDEN_IP_16_R_MT_MODBUS:
 	case DDEV_WIFI_16R_Modbus: {
-		m_Cmd = DAE_READ_COILS_CMD;
+		m_Cmd = _eDaeTcpState::DAE_READ_COILS_CMD;
 		m_pReq.prId[0] = 0;
 		m_pReq.prId[1] = 0;
 		m_uiTransactionCounter++;

@@ -13,9 +13,9 @@
 #include <sstream>
 #include <algorithm>
 #include <iostream>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include "../webserver/cWebem.h"
-#include "../json/json.h"
+#include <json/json.h>
 
 #include <ctime>
 
@@ -560,7 +560,7 @@ void MySensorsBase::MakeAndSendWindSensor(const int nodeID, const std::string &s
 		fChill = fTemp;
 		if ((fTemp < 10.0) && (fWind >= 1.4))
 		{
-			fChill = 13.12f + 0.6215f*fTemp - 11.37f*pow(fWind*3.6f, 0.16f) + 0.3965f*fTemp*pow(fWind*3.6f, 0.16f);
+			fChill = 13.12f + 0.6215f*fTemp - 11.37f*std::pow(fWind*3.6f, 0.16f) + 0.3965f*fTemp*std::pow(fWind*3.6f, 0.16f);
 		}
 	}
 	int cNode = (nodeID << 8) | ChildID;
@@ -991,7 +991,7 @@ void MySensorsBase::SendSensor2Domoticz(_tMySensorNode *pNode, _tMySensorChild *
 				if (pChild->GetValue(V_FORECAST, stringValue))
 				{
 					std::string devname = (!pChild->childName.empty()) ? pChild->childName : "Forecast";
-					SendTextSensor(pSensorBaro->nodeID, pSensorBaro->childID, pChild->batValue, stringValue, devname);
+					SendTextSensor(pChild->nodeID, pChild->childID, pChild->batValue, stringValue, devname);
 				}
 			}
 		}

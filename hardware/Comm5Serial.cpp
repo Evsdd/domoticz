@@ -5,6 +5,8 @@
 #include "../main/Logger.h"
 #include "../main/RFXtrx.h"
 
+using namespace boost::placeholders;
+
 /*
 	This driver allows Domoticz to control any I/O module from the MA-4xxx Family
 
@@ -180,7 +182,7 @@ void Comm5Serial::readCallBack(const char * data, size_t len)
 	ParseData((const unsigned char*)data, static_cast<int>(len));
 }
 
-static uint16_t crc16_update(uint16_t crc, uint8_t data)
+uint16_t Comm5Serial::crc16_update(uint16_t crc, const uint8_t data)
 {
 #define POLYNOME 0x13D65
 	int i;
@@ -260,9 +262,11 @@ void Comm5Serial::ParseData(const unsigned char* data, const size_t len)
 		case STFRAME_CRC2:
 			frame.push_back(data[i]);
 			frameCRC = crc16_update(frameCRC, 0);
-			readCRC =  (uint16_t)(frame.at(frame.size() - 2) << 8) | (frame.at(frame.size() - 1) & 0xFF);
+			readCRC = (static_cast<uint16_t>(frame.at(frame.size() - 2)) << 8) | frame.at(frame.size() - 1);
 			if (frameCRC == readCRC)
 				parseFrame(frame);
+			else
+				Log(LOG_ERROR, "Frame CRC error");			
 			currentState = STSTART_OCTET1;
 			frame.clear();
 			break;

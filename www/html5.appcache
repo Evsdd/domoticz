@@ -183,12 +183,15 @@ images/forward_enabled_hover.png
 images/Gas48.png
 images/gauge.png
 images/gauge48.png
+images/gdown.png
 images/general.png
 images/Generic.png
 images/Generic48_Off.png
 images/Generic48_On.png
+images/gequal.png
 images/glyphicons-halflings.png
 images/glyphicons-halflings-white.png
+images/gup.png
 images/handle.png
 images/Harddisk.png
 images/Harddisk48_Off.png
@@ -525,14 +528,20 @@ app/hardware/setup/ZWave.js
 app/log/components/DeviceLevelChart.js
 app/log/components/DeviceOnOffChart.js
 app/log/components/DeviceTextLogTable.js
+app/log/AngularBase.js
+app/log/Base.js
 app/log/DeviceLog.html
 app/log/DeviceLog.js
+app/log/DomoticzBase.js
 app/log/factories.js
+app/log/GraphLog.html
 app/log/GraphLog.js
 app/log/LightLog.html
 app/log/LightLog.js
+app/log/RefreshingChart.js
 app/log/SceneLog.html
 app/log/SceneLog.js
+app/log/TemperatureLog.html
 app/log/TemperatureLog.js
 app/log/TextLog.html
 app/log/TextLog.js
@@ -540,6 +549,9 @@ app/log/TextLog.js
 app/notifications/constants.js
 app/notifications/DeviceNotifications.js
 app/notifications/factories.js
+
+app/plans/RoomPlans.html
+app/plans/RoomPlans.js
 
 app/report/CounterReport.html
 app/report/CounterReport.js
@@ -560,6 +572,7 @@ app/timers/SceneTimersController.js
 
 app/AboutController.js
 app/app.js
+app/app.notifications.js
 app/app.constants.js
 app/app.permissions.js
 app/app.routes.js
@@ -587,14 +600,12 @@ app/main.js
 app/NotificationController.js
 app/OfflineController.js
 app/RestoreDatabaseController.js
-app/RoomplanController.js
 app/ScenesController.js
 app/SetupController.js
 app/TemperatureController.js
 app/TemperatureCustomLogController.js
 app/TimerplanController.js
 app/UpdateController.js
-app/UpdateController2.js
 app/UsersController.js
 app/UserVariablesController.js
 app/UtilityController.js
@@ -642,12 +653,11 @@ js/colpick.js
 js/date.format.js
 js/domoticz.js
 js/domoticzdevices.js
-js/export-csv.js
 js/FileSaver.js
 js/highcharts-ng.min.js
 js/html5shiv.js
 js/i18next-1.8.0.min.js
-js/jquery-3.4.1.min.js
+js/jquery-3.5.1.min.js
 js/jquery-ui.min.js
 js/jquery.ddslick.min.js
 js/jquery.isotope.min.js
@@ -662,7 +672,7 @@ js/ng-grid-flexible-height.js
 js/ng-grid.min.js
 js/ngDraggable.js
 js/ngload.min.js
-js/require.js
+js/require.min.js
 js/respond.min.js
 js/ui-bootstrap.min.js
 js/wow.min.js
@@ -680,8 +690,6 @@ secpanel/js/ion.sound.min.js
 #SwitchIcons
 
 # HTML pages
-views/log/device_graph_log.html
-views/log/device_temperature_log.html
 views/about.html
 views/cam.html
 views/customicons.html
@@ -701,7 +709,6 @@ views/notification.html
 views/notifications.html
 views/offline.html
 views/restoredatabase.html
-views/roomplan.html
 views/scenes.html
 views/setup.html
 views/temperature.html
@@ -710,7 +717,6 @@ views/temperature_custom_temp_log.html
 views/timerplan.html
 views/timers.html
 views/update.html
-views/update2.html
 views/users.html
 views/utility.html
 views/weather.html

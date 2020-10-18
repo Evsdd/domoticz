@@ -1,25 +1,13 @@
 define(['app', 'livesocket'], function (app) {
-	app.controller('WeatherController', function ($scope, $rootScope, $location, $http, $interval, permissions, livesocket) {
+	app.controller('WeatherController', function ($scope, $rootScope, $location, $http, $interval, deviceApi, permissions, livesocket) {
 
 		var ctrl = this;
-		$scope.broadcast_unsubscribe = undefined;
 
 		MakeFavorite = function (id, isfavorite) {
-			if (permissions.hasPermission("Viewer")) {
-				HideNotify();
-				ShowNotify($.t('You do not have permission to do that!'), 2500, true);
-				return;
-			}
-
-			$.ajax({
-				url: "json.htm?type=command&param=makefavorite&idx=" + id + "&isfavorite=" + isfavorite,
-				async: false,
-				dataType: 'json',
-				success: function (data) {
-					ShowWeathers();
-				}
+			deviceApi.makeFavorite(id, isfavorite).then(function() {
+				ShowWeathers();
 			});
-		}
+		};
 
 		EditRainDevice = function (idx, name, description, addjmulti) {
 			$.devIdx = idx;
@@ -51,11 +39,12 @@ define(['app', 'livesocket'], function (app) {
 			$("#dialog-editvisibilitydevice").dialog("open");
 		}
 
-		EditWeatherDevice = function (idx, name, description) {
+		EditWeatherDevice = function (idx, name, description, addjmulti) {
 			$.devIdx = idx;
 			$("#dialog-editweatherdevice #deviceidx").text(idx);
 			$("#dialog-editweatherdevice #devicename").val(unescape(name));
 			$("#dialog-editweatherdevice #devicedescription").val(unescape(description));
+			$("#dialog-editweatherdevice #multiply").val(addjmulti);
 			$("#dialog-editweatherdevice").i18n();
 			$("#dialog-editweatherdevice").dialog("open");
 		}
@@ -98,20 +87,6 @@ define(['app', 'livesocket'], function (app) {
 
 				}
 			});
-
-			$scope.broadcast_unsubscribe = $scope.$on('jsonupdate', function (event, data) {
-				/*
-					When this event is caught, a widget status update is received.
-					We call RefreshItem to update the widget.
-				*/
-				if (typeof data.ServerTime != 'undefined') {
-					$rootScope.SetTimeAndSun(data.Sunrise, data.Sunset, data.ServerTime);
-				}
-				if (typeof data.ActTime != 'undefined') {
-					$.LastUpdateTime = parseInt(data.ActTime);
-				}
-				RefreshItem(data.item);
-			});
 		}
 
 		ShowForecast = function () {
@@ -120,11 +95,6 @@ define(['app', 'livesocket'], function (app) {
 
 		ShowWeathers = function () {
 			$('#modal').show();
-
-			if (typeof $scope.broadcast_unsubscribe != 'undefined') {
-				$scope.broadcast_unsubscribe();
-				$scope.broadcast_unsubscribe = undefined;
-			}
 
 			$.ajax({
 				url: "json.htm?type=devices&filter=weather&used=true&order=[Order]",
@@ -177,6 +147,10 @@ define(['app', 'livesocket'], function (app) {
 			$.LastUpdateTime = parseInt(0);
 			$scope.MakeGlobalConfig();
 
+			$scope.$on('device_update', function (event, deviceData) {
+				RefreshItem(deviceData);
+			});
+
 			var dialog_editweatherdevice_buttons = {};
 			dialog_editweatherdevice_buttons[$.t("Update")] = function () {
 				var bValid = true;
@@ -187,6 +161,7 @@ define(['app', 'livesocket'], function (app) {
 						url: "json.htm?type=setused&idx=" + $.devIdx +
 						'&name=' + encodeURIComponent($("#dialog-editweatherdevice #devicename").val()) +
 						'&description=' + encodeURIComponent($("#dialog-editweatherdevice #devicedescription").val()) +
+						'&addjmulti=' + $("#dialog-editweatherdevice #edittable #multiply").val() +
 						'&used=true',
 						async: false,
 						dataType: 'json',
@@ -423,13 +398,6 @@ define(['app', 'livesocket'], function (app) {
 			});
 
 		};
-		$scope.$on('$destroy', function () {
-			//cleanup
-			if (typeof $scope.broadcast_unsubscribe != 'undefined') {
-				$scope.broadcast_unsubscribe();
-				$scope.broadcast_unsubscribe = undefined;
-			}
-		});
 	}).directive('dzweatherwidget', ['$rootScope', '$location', function ($rootScope,$location) {
 		return {
 			priority: 0,
@@ -560,7 +528,7 @@ define(['app', 'livesocket'], function (app) {
 					} else if (typeof item.Barometer != 'undefined') {
 						return EditBaroDevice(item.idx, escape(item.Name), escape(item.Description), item.AddjValue2);
 					} else {
-						return EditWeatherDevice(item.idx, escape(item.Name), escape(item.Description));
+						return EditWeatherDevice(item.idx, escape(item.Name), escape(item.Description), item.AddjMulti);
 					}
 				};
 

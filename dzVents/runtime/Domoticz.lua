@@ -1,5 +1,5 @@
 local scriptPath = globalvariables['script_path']
-package.path = package.path .. ';' .. scriptPath .. '?.lua'
+package.path = scriptPath .. '?.lua' .. ';' .. package.path
 
 local Camera = require('Camera')
 local Device = require('Device')
@@ -8,6 +8,13 @@ local Time = require('Time')
 local TimedCommand = require('TimedCommand')
 local utils = require('Utils')
 local _ = require('lodash')
+local constants = require('constants');
+
+local function merge(toTable, fromTable)
+	for k, v in pairs(fromTable) do
+		toTable[k] = v
+	end
+end
 
 -- main class
 local function Domoticz(settings)
@@ -22,8 +29,8 @@ local function Domoticz(settings)
 
 	-- check if the user set a lat/lng
 	-- if not, then daytime, nighttime is incorrect
-	if (_G.timeofday['SunriseInMinutes'] == 0 and _G.timeofday['SunsetInMinutes'] == 0) then
-		utils.log('No information about sunrise and sunset available. Please set lat/lng information in settings.', utils.LOG_ERROR)
+	if not(globalvariables.locationSet) then
+		utils.log('No information about longitude / latitude available. Please set lat/lng information in settings.', utils.LOG_ERROR)
 	end
 
 	nowTime['isDayTime'] = timeofday['Daytime']
@@ -32,6 +39,7 @@ local function Domoticz(settings)
 	nowTime['isNightTime'] = timeofday['Nighttime']
 	nowTime['sunriseInMinutes'] = timeofday['SunriseInMinutes']
 	nowTime['sunsetInMinutes'] = timeofday['SunsetInMinutes']
+	nowTime['solarnoonInMinutes'] = timeofday['SunAtSouthInMinutes']
 	nowTime['civTwilightStartInMinutes'] = timeofday['CivTwilightStartInMinutes']
 	nowTime['civTwilightEndInMinutes'] = timeofday['CivTwilightEndInMinutes']
 
@@ -42,6 +50,7 @@ local function Domoticz(settings)
 		['devices'] = {},
 		['scenes'] = {},
 		['groups'] = {},
+		['hardware'] = {},
 		['changedDevices'] = {},
 		['changedVariables'] = {},
 		['security'] = globalvariables['Security'],
@@ -50,230 +59,32 @@ local function Domoticz(settings)
 		['startTime'] = Time(globalvariables['domoticz_start_time']),
 		['systemUptime'] = tonumber(globalvariables['systemUptime']),
 		['variables'] = {},
-		['PRIORITY_LOW'] = -2,
-		['PRIORITY_MODERATE'] = -1,
-		['PRIORITY_NORMAL'] = 0,
-		['PRIORITY_HIGH'] = 1,
-		['PRIORITY_EMERGENCY'] = 2,
-		['SOUND_DEFAULT'] = 'pushover',
-		['SOUND_BIKE'] = 'bike',
-		['SOUND_BUGLE'] = 'bugle',
-		['SOUND_CASH_REGISTER'] = 'cashregister',
-		['SOUND_CLASSICAL'] = 'classical',
-		['SOUND_COSMIC'] = 'cosmic',
-		['SOUND_FALLING'] = 'falling',
-		['SOUND_GAMELAN'] = 'gamelan',
-		['SOUND_INCOMING'] = 'incoming',
-		['SOUND_INTERMISSION'] = 'intermission',
-		['SOUND_MAGIC'] = 'magic',
-		['SOUND_MECHANICAL'] = 'mechanical',
-		['SOUND_PIANOBAR'] = 'pianobar',
-		['SOUND_SIREN'] = 'siren',
-		['SOUND_SPACEALARM'] = 'spacealarm',
-		['SOUND_TUGBOAT'] = 'tugboat',
-		['SOUND_ALIEN'] = 'alien',
-		['SOUND_CLIMB'] = 'climb',
-		['SOUND_PERSISTENT'] = 'persistent',
-		['SOUND_ECHO'] = 'echo',
-		['SOUND_UPDOWN'] = 'updown',
-		['SOUND_NONE'] = 'none',
-		['HUM_NORMAL'] = 0,
-		['HUM_COMFORTABLE'] = 1,
-		['HUM_DRY'] = 2,
-		['HUM_WET'] = 3,
-		-- true mapping to numbers is done in the device adapters for
-		-- baro and temphumbaro devices
-		['BARO_STABLE'] = 'stable',
-		['BARO_SUNNY'] = 'sunny',
-		['BARO_CLOUDY'] = 'cloudy',
-		['BARO_UNSTABLE'] = 'unstable',
-		['BARO_THUNDERSTORM'] = 'thunderstorm',
-		['BARO_NOINFO'] = 'noinfo',
-		['BARO_PARTLYCLOUDY'] = 'partlycloudy',
-		['BARO_RAIN'] = 'rain',
-		['ALERTLEVEL_GREY'] = 0,
-		['ALERTLEVEL_GREEN'] = 1,
-		['ALERTLEVEL_YELLOW'] = 2,
-		['ALERTLEVEL_ORANGE'] = 3,
-		['ALERTLEVEL_RED'] = 4,
-		['SECURITY_DISARMED'] = 'Disarmed',
-		['SECURITY_ARMEDAWAY'] = 'Armed Away',
-		['SECURITY_ARMEDHOME'] = 'Armed Home',
 		['LOG_INFO'] = utils.LOG_INFO,
 		['LOG_MODULE_EXEC_INFO'] = utils.LOG_MODULE_EXEC_INFO,
 		['LOG_DEBUG'] = utils.LOG_DEBUG,
 		['LOG_ERROR'] = utils.LOG_ERROR,
 		['LOG_FORCE'] = utils.LOG_FORCE,
-		['EVENT_TYPE_TIMER'] = 'timer',
-		['EVENT_TYPE_DEVICE'] = 'device',
-		['EVENT_TYPE_VARIABLE'] = 'variable',
-		['EVENT_TYPE_SECURITY'] = 'security',
-		['EVENT_TYPE_SCENE'] = 'scene',
-		['EVENT_TYPE_GROUP'] = 'group',
-		['EVENT_TYPE_HTTPRESPONSE'] = 'httpResponse',
-		['EVOHOME_MODE_AUTO'] = 'Auto',
-		['EVOHOME_MODE_TEMPORARY_OVERRIDE'] = 'TemporaryOverride',
-		['EVOHOME_MODE_PERMANENT_OVERRIDE'] = 'PermanentOverride',
-		['EVOHOME_MODE_FOLLOW_SCHEDULE'] = 'FollowSchedule',
-		['EVOHOME_MODE_AUTOWITHRESET'] = 'AutoWithReset',
-		['EVOHOME_MODE_AUTOWITHECO'] = 'AutoWithEco',
-		['EVOHOME_MODE_AWAY'] = 'Away',
-		['EVOHOME_MODE_DAYOFF'] = 'DayOff',
-		['EVOHOME_MODE_CUSTOM'] = 'Custom',
-		['EVOHOME_MODE_HEATINGOFF'] = 'HeatingOff',
-		['INTEGER'] = 'integer',
-		['FLOAT'] = 'float',
-		['STRING'] = 'string',
-		['DATE'] = 'date',
-		['TIME'] = 'time',
-		['NSS_FIREBASE'] = 'gcm', -- For the moment the change to fcm is only done in the url
-		['NSS_GOOGLE_CLOUD_MESSAGING'] = 'gcm',
-		['NSS_HTTP'] = 'http',
-		['NSS_KODI'] = 'kodi',
-		['NSS_LOGITECH_MEDIASERVER'] = 'lms',
-		['NSS_NMA'] = 'nma',
-		['NSS_PROWL'] = 'prowl',
-		['NSS_PUSHALOT'] = 'pushalot',
-		['NSS_PUSHBULLET'] = 'pushbullet',
-		['NSS_PUSHOVER'] = 'pushover',
-		['NSS_PUSHSAFER'] = 'pushsafer',
-		['NSS_TELEGRAM'] = 'telegram',
-		['BASETYPE_DEVICE'] = 'device',
-		['BASETYPE_SCENE'] = 'scene',
-		['BASETYPE_GROUP'] = 'group',
-		['BASETYPE_VARIABLE'] = 'variable',
-		['BASETYPE_SECURITY'] = 'security',
-		['BASETYPE_TIMER'] = 'timer',
-		['BASETYPE_HTTP_RESPONSE'] = 'httpResponse',
-
 		utils = {
-			_ = _,
-
-			setLogMarker = function(logMarker)
-				return utils.setLogMarker(logMarker)
-			end,
-
-			toCelsius = function(f, relative)
-				return utils.toCelsius(f, relative)
-			end,
-
-			urlEncode = function(s, strSub)
-				return utils.urlEncode(s, strSub)
-			end,
-
-			urlDecode = function(s)
-				return utils.urlDecode(s)
-			end,
-
-			round = function(x,n)
-				return utils.round(x,n)
-			end,
-
-			osExecute = function(cmd)
-				utils.osExecute(cmd)
-			end,
-
-			fileExists = function(path)
-				return utils.fileExists(path)
-			end,
-
-			fromJSON = function(json, fallback)
-				return utils.fromJSON(json, fallback)
-			end,
-
-			toJSON = function(luaTable)
-				return utils.toJSON(luaTable)
-			end,
-
-			fromXML = function(xml, fallback)
-				return utils.fromXML(xml, fallback)
-			end,
-
-			toXML = function( luaTable, header)
-				return utils.toXML(luaTable, header)
-			end,
-
-			toBase64 = function (s)
-				return utils.toBase64(s)
-			end,
-
-			fromBase64 = function (s)
-				return utils.fromBase64(s)
-			end,
-
-			rgbToHSB = function(r, g, b)
-				return utils.rgbToHSB(r,g,b)
-			end,
-
-			hsbToRGB = function(h, s, b)
-				return utils.hsbToRGB(h,s,b)
-			end,
-
-			dumpTable = function(t, level)
-				return utils.dumpTable(t, level)
-			end,
-
-			stringSplit = function(text, sep)
-				return utils.stringSplit(text, sep)
-			end,
-
-			inTable = function(t, searchItem)
-				return utils.inTable(t, searchItem)
-			end,
-
-			rightPad = function(text, length, char)
-				return utils.rightPad(text, length, char)
-			end,
-
-			leftPad = function(text, length, char)
-				return utils.leftPad(text, length, char)
-			end,
-
-			centerPad = function(text, length, char)
-				return utils.centerPad(text, length, char)
-			end,
-
-			leadingZeros = function(num, length)
-				return utils.leadingZeros(num, length)
-			end,
-
-			numDecimals = function(num, int, dec)
-				return utils.numDecimals(num, int, dec)
-			end,
-
-			deviceExists = function (parm)
-				return utils.deviceExists(parm)
-			end,
-
-			sceneExists = function (parm)
-				return utils.sceneExists(parm)
-			end,
-
-			groupExists = function (parm)
-				return utils.groupExists(parm)
-			end,
-
-			variableExists = function (parm)
-				return utils.variableExists(parm)
-			end,
-
-			cameraExists = function (parm)
-				return utils.cameraExists(parm)
-			end,
-
+			_ = _
 		}
 	}
 
-	-- add domoticz commands to the commandArray
-	function self.sendCommand(command, value)
-		table.insert(self.commandArray, { [command] = value })
+	merge(self, constants)
+	merge(self.utils, utils)
 
+	-- add domoticz commands to the commandArray or delay
+	function self.sendCommand(command, value, delay)
+		if delay and tonumber(delay) then
+			self.emitEvent('___' .. command .. '__' , value ).afterSec(delay)
+		else
+			table.insert(self.commandArray, { [command] = value })
+		end
 		-- return a reference to the newly added item
-		return self.commandArray[#self.commandArray], command, value
+		return self.commandArray[#self.commandArray], command, value, delay
 	end
 
 	-- have domoticz send a push notification
-	function self.notify(subject, message, priority, sound, extra, subSystems)
+	function self.notify(subject, message, priority, sound, extra, subSystems, delay)
 		-- set defaults
 		if (priority == nil) then priority = self.PRIORITY_NORMAL end
 		if (message == nil) then message = '' end
@@ -295,29 +106,34 @@ local function Domoticz(settings)
 			end
 		end
 
-		--[[
 		if _subSystem:find('gcm') then
-			utils.log('Notification subsystem Google Cloud Messaging (gcm) has been deprecated by Google. Please consider switching to Firebase', utils.LOG_ERROR)
+			utils.log('Notification subsystem Google Cloud Messaging (gcm) has been deprecated by Google. Switch to Firebase now!', utils.LOG_ERROR)
+			_subSystem = _subSystem:gsub('gcm','fcm')
 		end
-		]] --
 
-		local data = subject
-				.. '#' .. message
-				.. '#' .. tostring(priority)
-				.. '#' .. tostring(sound)
-				.. '#' .. tostring(extra)
-				.. '#' .. tostring(_subSystem)
-		self.sendCommand('SendNotification', data)
+		 local function strip(str)
+			local stripped = tostring(str):gsub('#','')
+			return stripped
+		end
+
+		local data = strip(subject)
+				.. '#' .. strip(message)
+				.. '#' .. strip(priority)
+				.. '#' .. strip(sound)
+				.. '#' .. strip(extra)
+				.. '#' .. strip(_subSystem)
+				self.sendCommand('SendNotification', data, delay)
+
 	end
 
 	-- have domoticz send an email
-	function self.email(subject, message, mailTo)
+	function self.email(subject, message, mailTo, delay)
 		if (mailTo == nil) then
 			utils.log('No mail-to is provided', utils.LOG_ERROR)
 		else
 			if (subject == nil) then subject = '' end
 			if (message == nil) then message = '' end
-			self.sendCommand('SendEmail', subject .. '#' .. message .. '#' .. mailTo)
+			self.sendCommand('SendEmail', subject .. '#' .. message .. '#' .. mailTo, delay)
 		end
 	end
 
@@ -326,7 +142,7 @@ local function Domoticz(settings)
 		local delay = delay or 0
 		local message = 'triggerHTTPResponse: ' .. (message or httpResponse)
 		local url = self.settings['Domoticz url'] .. '/json.htm?type=command&param=addlogmessage&message=' .. self.utils.urlEncode(message)
-				self.openURL  
+				self.openURL
 				(
 					{
 						url = url,
@@ -336,17 +152,46 @@ local function Domoticz(settings)
 	end
 
 	-- have domoticz send snapshot
-	function self.snapshot(cameraID, subject)
-		if tostring(cameraID):match("%a") then
-			cameraID = self.cameras(cameraID).id
+	function self.snapshot(cameraIDS, subject)
+		local subject = subject or 'domoticz'
+		local cameraIDS = cameraIDS or 1
+
+		local cameraIDS = ( type(cameraIDS) == 'table' and cameraIDS ) or utils.stringSplit(cameraIDS,'%p')
+
+		for index, camera in ipairs(cameraIDS) do
+			if tostring(camera):match('%a') then
+				cameraIDS[index] = self.cameras(camera).id
+			end
 		end
-		local snapshotCommand = "SendCamera:" .. cameraID
-		return TimedCommand(self, snapshotCommand , subject, 'camera') -- works with afterXXX
+
+		if not( cameraIDS[2] ) then
+			local snapshotCommand = "SendCamera:" .. cameraIDS[1]
+			return TimedCommand(self, snapshotCommand , subject, 'camera')
+		else
+			cameraIDS = table.concat(cameraIDS, ';')
+			subject = self.utils.urlEncode(subject)
+			return TimedCommand(self, 'OpenURL', self.settings['Domoticz url'] .. "/json.htm?type=command&param=emailcamerasnapshot&camidx=" .. cameraIDS .. '&subject=' .. subject , 'camera')
+		end
 	end
 
 	-- have domoticz send an sms
-	function self.sms(message)
-		self.sendCommand('SendSMS', message)
+	function self.sms(message, delay)
+		self.sendCommand('SendSMS', message, delay)
+	end
+
+	function self.emitEvent(eventname, data)
+
+		if (type(data) == 'table') then
+			data = utils.toJSON(data)
+		else
+			data = tostring(data)
+		end
+
+		local eventinfo = {
+			name = eventname,
+			data = data
+		}
+		return TimedCommand(self, 'CustomEvent', eventinfo, 'emitEvent')
 	end
 
 	-- have domoticz open a url
@@ -367,7 +212,7 @@ local function Domoticz(settings)
 			local postData
 
 			-- process body data
-			if (method == 'POST') then
+			if (method ~= 'GET') then
 				postData = ''
 				if (options.postData ~= nil) then
 					if (type(options.postData) == 'table') then
@@ -422,6 +267,31 @@ local function Domoticz(settings)
 		end
 	end
 
+	-- get information from hardware
+	function self.hardwareInfo( id )
+		local hardware, deviceNames, deviceIds = {}, {}, {}
+
+		local hardwareDevices = self.devices().filter(function(dv)
+			return dv.hardwareId == id or dv.hardwareName == id
+		end).forEach(function(sdv)
+			table.insert(deviceNames, sdv.name)
+			table.insert(deviceIds, sdv.id)
+		end)
+
+		if #deviceNames > 0 then
+			local aDevice = self.devices(deviceNames[1])
+
+			hardware.name = aDevice.hardwareName
+			hardware.id = aDevice.hardwareID
+			hardware.type = aDevice.hardwareType
+			hardware.typeValue = aDevice.TypeValue
+			hardware.deviceNames = deviceNames
+			hardware.deviceIds = deviceIds
+		end
+
+		return hardware
+	end
+
 	-- send a scene switch command
 	function self.setScene(scene, value)
 		utils.log('setScene is deprecated. Please use the scene object directly.', utils.LOG_INFO)
@@ -433,7 +303,6 @@ local function Domoticz(settings)
 		utils.log('switchGroup is deprecated. Please use the group object directly.', utils.LOG_INFO)
 		return TimedCommand(self, 'Group:' .. group, value, 'device', group.state)
 	end
-
 	if (_G.TESTMODE) then
 		function self._getUtilsInstance()
 			return utils
@@ -459,22 +328,19 @@ local function Domoticz(settings)
 		return self.utils.round(x, n)
 	 end
 
-	function self.dump()
-		self.utils.dumpTable(settings, '> ')
+	function self.dump( file )
+		self.utils.dumpTable(settings, '> ', file)
 	end
 
-	function self.logDevice(device)
-		self.utils.dumpTable(device, '> ')
-	end
-
-	function self.logCamera(camera)
-		self.utils.dumpTable(camera, '> ')
+	function self.logObject(object, file, objectType )
+		self.utils.dumpTable(object, objectType .. '> ', file)
 	end
 
 	self.__cameras = {}
 	self.__devices = {}
 	self.__scenes = {}
 	self.__groups = {}
+	self.__hardware = {}
 	self.__variables = {}
 
 	function self._getItemFromData(baseType, id)
@@ -515,6 +381,9 @@ local function Domoticz(settings)
 		elseif (baseType == 'camera') then
 			cache = self.__cameras
 			constructor = Camera
+		elseif (baseType == 'hardware') then
+			cache = self.__hardware
+			constructor = Device
 		else
 			-- ehhhh
 		end
@@ -539,10 +408,10 @@ local function Domoticz(settings)
 
 		local noObjectMessage = 'There is no ' .. baseType .. ' with that name or id: ' .. tostring(id)
 
-		if (baseType == 'scene' or baseType == 'group') then
-			-- special case for scenes and groups
-			-- as they may not be in the collection if Domoticz wasn't restarted after creating the scene or group.
-				noObjectMessage = noObjectMessage .. '. If you just created the '.. baseType .. ' you may have to restart Domoticz to make it become visible to dzVents.'
+		if (baseType == 'scene' or baseType == 'group' or baseType == 'hardware') then
+			-- special case for hardware, scenes and groups
+			-- as they may not be in the collection if Domoticz wasn't restarted after creating the hardware, scene or group.
+			noObjectMessage = noObjectMessage .. '. If you just created the '.. baseType .. ' you may have to restart Domoticz to make it become visible to dzVents.'
 		end
 		utils.log(noObjectMessage, utils.LOG_ERROR)
 	end
@@ -706,6 +575,14 @@ local function Domoticz(settings)
 			return self._getObject('camera', id)
 		else
 			return self._setIterators({}, true, 'camera', false)
+		end
+	end
+
+	function self.hardware(id)
+		if (id ~= nil) then
+			return self._getObject('hardware', id)
+		else
+			return self._setIterators({}, true, 'hardware', false)
 		end
 	end
 
